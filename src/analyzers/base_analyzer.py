@@ -7,14 +7,15 @@ from core.exceptions import AnalyzerError
 class BaseAnalyzer(IAnalyzer, ABC):
     """Base class for all analyzers implementing common functionality."""
     
-    def __init__(self, session_id: str, local_path: str):
+    def __init__(self, session_id: str, local_path: str, validate_path: bool = True):
         self.session_id = session_id
         self.local_path = local_path
-        self._validate_path()
+        if validate_path:
+            self._validate_path()
     
     def _validate_path(self):
         """Validate that the path exists and is accessible."""
-        if not os.path.exists(self.local_path):
+        if self.local_path and not os.path.exists(self.local_path):
             raise AnalyzerError(f"Path does not exist: {self.local_path}")
     
     def _get_python_files(self) -> list:

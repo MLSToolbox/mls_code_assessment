@@ -7,11 +7,9 @@ from typing import Dict, Any
 def setup_middleware(app: Flask) -> Flask:
     """Configure middleware for the Flask app."""
     
-    # CORS setup
     CORS(app, supports_credentials=True, origins=['*'])
     app.config["CORS_HEADERS"] = ["Content-Type", "X-Requested-With", "X-CSRFToken"]
     
-    # Request logging middleware
     @app.before_request
     def log_request():
         g.start_time = time.time()
@@ -23,7 +21,6 @@ def setup_middleware(app: Flask) -> Flask:
         logging.info(f"Response: {response.status_code} - {duration:.3f}s")
         return response
     
-    # Request validation middleware
     @app.before_request
     def validate_request():
         if request.method == 'POST' and request.path.startswith('/api/'):

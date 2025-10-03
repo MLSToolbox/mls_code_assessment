@@ -1,18 +1,18 @@
-# api/routes.py
 from flask import Flask, request, make_response
 from flask_cors import cross_origin
-from typing import Dict, Any
 
 from session.session_manager import SessionManager
 from api.serializers import ResponseSerializer
-from api.middleware import setup_middleware
-from core.exceptions import SessionError, AnalyzerError
-from utils.validation import validate_session_id
+from core.exceptions import SessionError
+import config.settings as config
+from analyzers.factory import AnalyzerFactory
 
 def create_routes(app: Flask) -> Flask:
     """Create and configure API routes."""
     
-    @app.route('/api/rate_app', methods=['POST'])
+    api_prefix = config.settings.API_PREFIX
+
+    @app.route(f'{api_prefix}/rate_app', methods=['POST'])
     @cross_origin()
     def rate_app():
         """Analyze code quality."""
@@ -33,8 +33,8 @@ def create_routes(app: Flask) -> Flask:
             return ResponseSerializer.error(f"Session error: {str(e)}", 400)
         except Exception as e:
             return ResponseSerializer.error(f"Analysis failed: {str(e)}", 500)
-    
-    @app.route('/api/get_report', methods=['POST'])
+
+    @app.route(f'{api_prefix}/get_report', methods=['POST'])
     @cross_origin()
     def get_report():
         """Generate detailed report for specific analyzer."""
@@ -71,8 +71,8 @@ def create_routes(app: Flask) -> Flask:
             return ResponseSerializer.error(f"Session error: {str(e)}", 400)
         except Exception as e:
             return ResponseSerializer.error(f"Report generation failed: {str(e)}", 500)
-    
-    @app.route('/', methods=['GET', 'POST'])
+
+    @app.route(f'{api_prefix}/health_check', methods=['GET', 'POST'])
     @cross_origin()
     def health_check():
         """Health check endpoint."""
@@ -81,12 +81,11 @@ def create_routes(app: Flask) -> Flask:
             "status": "healthy",
             "method": request.method
         })
-    
-    @app.route('/api/analyzers', methods=['GET'])
+
+    @app.route(f'{api_prefix}/analyzers', methods=['GET'])
     @cross_origin()
     def get_analyzers():
         """Get available analyzers."""
-        from analyzers.factory import AnalyzerFactory
         analyzers = AnalyzerFactory.get_available_analyzers()
         return ResponseSerializer.success({"analyzers": analyzers})
     

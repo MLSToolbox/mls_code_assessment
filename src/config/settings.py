@@ -4,6 +4,8 @@ from typing import Dict, Any
 class Settings:
     """Application configuration."""
     
+    API_PREFIX = "/api"
+    
     EXECUTION_MODE = os.getenv("EXECUTION_MODE", "debug")
     HOST = "0.0.0.0"
     PORT = 5060

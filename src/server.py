@@ -7,7 +7,6 @@ from api.routes import create_routes
 from api.middleware import setup_middleware
 from config.settings import settings
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -17,10 +16,8 @@ def create_app() -> Flask:
     """Create and configure Flask application."""
     app = Flask(__name__)
     
-    # Setup middleware
     app = setup_middleware(app)
     
-    # Setup routes
     app = create_routes(app)
     
     return app

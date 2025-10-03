@@ -8,7 +8,7 @@ La nueva arquitectura implementa **principios SOLID** y **patrones de diseño** 
 
 ```
 src/
-├── core/                    # Núcleo del sistema
+├── core/                   # Núcleo del sistema
 ├── analyzers/              # Analizadores de código
 ├── session/                # Gestión de sesiones
 ├── api/                    # Capa de presentación (REST API)
@@ -20,7 +20,7 @@ src/
 
 ---
 
-## 📦 **core/** - Núcleo del Sistema
+## **core/** - Núcleo del Sistema
 
 ### `core/exceptions.py`
 **Propósito**: Manejo centralizado de excepciones
@@ -48,8 +48,7 @@ src/
 **Patrón**: Interface Segregation Principle (ISP)
 
 ---
-
-## 🔍 **analyzers/** - Analizadores de Código
+##  **analyzers/** - Analizadores de Código
 
 ### `analyzers/base_analyzer.py`
 **Propósito**: Clase abstracta con funcionalidad común
@@ -87,8 +86,7 @@ src/
 **Extensibilidad**: Agregar nuevos analizadores sin modificar código existente
 
 ---
-
-## 🎯 **session/** - Gestión de Sesiones
+## **session/** - Gestión de Sesiones
 
 ### `session/session_manager.py`
 **Propósito**: Orquestador principal del flujo de análisis
@@ -122,8 +120,7 @@ src/
 - **Configuración por tiempo de vida**
 
 ---
-
-## 🌐 **api/** - Capa de Presentación
+## **api/** - Capa de Presentación
 
 ### `api/routes.py`
 **Propósito**: Definición de endpoints REST
@@ -158,8 +155,7 @@ src/
 - Medición de tiempos de respuesta
 
 ---
-
-## 🔧 **utils/** - Utilidades
+## **utils/** - Utilidades
 
 ### `utils/validation.py`
 **Propósito**: Funciones de validación reutilizables
@@ -170,8 +166,7 @@ src/
 **Características**: Funciones puras y testeable
 
 ---
-
-## ⚙️ **config/** - Configuración
+## **config/** - Configuración
 
 ### `config/settings.py`
 **Propósito**: Configuración centralizada
@@ -185,8 +180,7 @@ src/
 - **Fácil modificación**
 
 ---
-
-## 🚀 **server.py** - Punto de Entrada
+## **server.py** - Punto de Entrada
 
 **Propósito**: Bootstrap de la aplicación
 - Configuración de logging
@@ -195,7 +189,6 @@ src/
 - Detección de modo producción/desarrollo
 
 ---
-
 ## Patrones de Diseño Implementados
 
 ### 1. **Factory Pattern** (`analyzers/factory.py`)
@@ -215,78 +208,51 @@ src/
 - Analizadores son inyectados dinámicamente
 
 ---
-
 ## Principios SOLID Aplicados
 
-### ✅ **Single Responsibility Principle (SRP)**
+### **Single Responsibility Principle (SRP)**
 - Cada clase tiene una responsabilidad específica
 - FileHandler solo maneja archivos
 - CleanupService solo limpia recursos
 
-### ✅ **Open/Closed Principle (OCP)**
+### **Open/Closed Principle (OCP)**
 - Extensible sin modificar código existente
 - Nuevos analizadores heredan de BaseAnalyzer
 - Factory registra automáticamente
 
-### ✅ **Liskov Substitution Principle (LSP)**
+### **Liskov Substitution Principle (LSP)**
 - Analizadores son intercambiables
 - Todos implementan la misma interface
 
-### ✅ **Interface Segregation Principle (ISP)**
+### **Interface Segregation Principle (ISP)**
 - Interfaces específicas y cohesivas
 - IAnalyzer solo define lo necesario
 
-### ✅ **Dependency Inversion Principle (DIP)**
+### **Dependency Inversion Principle (DIP)**
 - Dependencias hacia abstracciones
 - SessionManager depende de IAnalyzer, no implementaciones concretas
 
 ---
-
-## Ventajas de la Nueva Arquitectura
-
-### 🔧 **Mantenibilidad**
-- Código organizado y cohesivo
-- Separación clara de responsabilidades
-- Fácil debugging y testing
-
-### 📈 **Escalabilidad**
-- Componentes desacoplados
-- Configuración externa
-- Cleanup automático de recursos
-
-### 🔌 **Extensibilidad**
-- Agregar analizadores: heredar de `BaseAnalyzer`
-- Nuevos formatos de reporte: implementar interface
-- Configuración dinámica
-
-### 🧪 **Testabilidad**
-- Interfaces mockeable
-- Funciones puras en utils
-- Inyección de dependencias
-
----
-
 ## Cómo Agregar un Nuevo Analizador
 
 ```python
-# 1. Crear nuevo archivo: analyzers/mi_analyzer.py
-class MiAnalyzer(BaseAnalyzer):
+# 1. Crear nuevo archivo: analyzers/ejemplo.py
+class Ejemplo(BaseAnalyzer):
     @property
     def analyzer_id(self) -> str:
-        return "Mi Analyzer"
+        return "Esto es un ejemplo"
     
     def analyze(self, code_path: str = None) -> AnalysisResult:
-        # Implementación específica
+        # Implementación del ejemplo
         pass
     
     def generate_report(self, code_path: str = None) -> bytes:
-        # Implementación específica  
+        # Implementación del ejemplo  
         pass
 
 # 2. Registrar en factory.py
-AnalyzerFactory.register_analyzer("mi_analyzer", MiAnalyzer)
+AnalyzerFactory.register_analyzer("ejemplo", Ejemplo)
 
 # 3. ¡Listo! El sistema lo detecta automáticamente
 ```
 
-La arquitectura está preparada para crecer de manera controlada y mantenible. 🚀

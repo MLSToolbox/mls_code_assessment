@@ -9,7 +9,8 @@ class FileHandler:
     
     def create_session_workspace(self, session_id: str, app_zip: bytes) -> str:
         """Create workspace and extract ZIP file."""
-        workspace_path = f"./{session_id}"
+        # Use absolute path to avoid issues with changing working directories
+        workspace_path = os.path.abspath(f"./{session_id}")
         
         try:
             # Create session directory

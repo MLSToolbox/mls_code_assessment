@@ -112,14 +112,13 @@ class SessionManager:
             return local_path
         except Exception as e:
             raise SessionError(f"Session setup failed: {str(e)}")
-    
+  
+  
     def _find_analyzer_type(self, analyzer_id: str) -> Optional[str]:
         """Find analyzer type by ID."""
-        for analyzer_type in self.analyzer_types:
-            analyzer = AnalyzerFactory.create_analyzer(
-                analyzer_type, self.session_id, ""
-            )
-            if analyzer.analyzer_id == analyzer_id:
-                return analyzer_type
-        return None
-
+        analyzer_id_map = {
+            "PyLint": "pylint",
+            "Radon - Complexity": "radon_cc",
+            "Radon - Maintainability": "radon_mi"
+        }
+        return analyzer_id_map.get(analyzer_id)
