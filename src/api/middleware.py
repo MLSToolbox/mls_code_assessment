@@ -2,7 +2,7 @@ from flask import Flask, request, g
 from flask_cors import CORS
 import logging
 import time
-from typing import Dict, Any
+import config.settings as config
 
 def setup_middleware(app: Flask) -> Flask:
     """Configure middleware for the Flask app."""
@@ -23,8 +23,8 @@ def setup_middleware(app: Flask) -> Flask:
     
     @app.before_request
     def validate_request():
-        if request.method == 'POST' and request.path.startswith('/api/'):
-            if not request.data and request.path != '/api/analyzers':
+        if request.method == 'POST' and request.path.startswith(f'{config.settings.API_PREFIX}'):
+            if not request.data and request.path != f'{config.settings.API_PREFIX}/analyzers':
                 from api.serializers import ResponseSerializer
                 return ResponseSerializer.error("Request body is required", 400)
     

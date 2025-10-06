@@ -9,10 +9,8 @@ from analyzers.factory import AnalyzerFactory
 
 def create_routes(app: Flask) -> Flask:
     """Create and configure API routes."""
-    
-    api_prefix = config.settings.API_PREFIX
 
-    @app.route(f'{api_prefix}/rate_app', methods=['POST'])
+    @app.route(f'{config.settings.API_PREFIX}/rate_app', methods=['POST'])
     @cross_origin()
     def rate_app():
         """Analyze code quality."""
@@ -34,7 +32,7 @@ def create_routes(app: Flask) -> Flask:
         except Exception as e:
             return ResponseSerializer.error(f"Analysis failed: {str(e)}", 500)
 
-    @app.route(f'{api_prefix}/get_report', methods=['POST'])
+    @app.route(f'{config.settings.API_PREFIX}/get_report', methods=['POST'])
     @cross_origin()
     def get_report():
         """Generate detailed report for specific analyzer."""
@@ -72,7 +70,7 @@ def create_routes(app: Flask) -> Flask:
         except Exception as e:
             return ResponseSerializer.error(f"Report generation failed: {str(e)}", 500)
 
-    @app.route(f'{api_prefix}/health_check', methods=['GET', 'POST'])
+    @app.route(f'{config.settings.API_PREFIX}/health_check', methods=['GET', 'POST'])
     @cross_origin()
     def health_check():
         """Health check endpoint."""
@@ -82,7 +80,7 @@ def create_routes(app: Flask) -> Flask:
             "method": request.method
         })
 
-    @app.route(f'{api_prefix}/analyzers', methods=['GET'])
+    @app.route(f'{config.settings.API_PREFIX}/analyzers', methods=['GET'])
     @cross_origin()
     def get_analyzers():
         """Get available analyzers."""
