@@ -3,7 +3,6 @@ from typing import List
 import re
 from analyzers.factory import AnalyzerFactory
 
-
 def validate_file_path(path: str) -> bool:
     """Validate file path exists and is accessible."""
     return os.path.exists(path) and os.access(path, os.R_OK)
