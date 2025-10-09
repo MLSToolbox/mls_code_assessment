@@ -1,35 +1,33 @@
+"""
+Application Settings
+Configuration management using environment variables.
+"""
 import os
-from typing import Dict, Any
+from dataclasses import dataclass
 
+
+@dataclass
 class Settings:
-    """Application configuration."""
+    """Application configuration settings."""
     
-    API_PREFIX = "/api"
+    # Server settings
+    HOST: str = os.getenv('HOST', '0.0.0.0')
+    PORT: int = int(os.getenv('PORT', '5060'))
+    DEBUG: bool = os.getenv('DEBUG', 'False').lower() == 'true'
     
-    EXECUTION_MODE = os.getenv("EXECUTION_MODE", "debug")
-    HOST = "0.0.0.0"
-    PORT = 5060
+    # API settings
+    API_PREFIX: str = '/api'
     
-    # Analysis settings
-    MAX_SESSION_LIFETIME = 3600  # seconds
-    CLEANUP_INTERVAL = 300  # seconds
+    # Session settings
+    SESSION_BASE_PATH: str = os.getenv('SESSION_BASE_PATH', '/tmp/mls_sessions')
+    SESSION_TTL_MINUTES: int = int(os.getenv('SESSION_TTL_MINUTES', '60'))
     
-    # File handling
-    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
-    ALLOWED_EXTENSIONS = ['.py', '.zip']
+    # Cleanup scheduler settings
+    CLEANUP_INTERVAL_MINUTES: int = int(os.getenv('CLEANUP_INTERVAL_MINUTES', '30'))
     
-    @classmethod
-    def get_analyzer_config(cls) -> Dict[str, Any]:
-        """Get analyzer-specific configuration."""
-        return {
-            "pylint": {
-                "disable": ["E0401"],
-                "output_format": "json2"
-            },
-            "radon": {
-                "complexity_threshold": 10,
-                "maintainability_threshold": 20
-            }
-        }
+    # CORS settings
+    CORS_ORIGINS: str = os.getenv('CORS_ORIGINS', '*')
 
+
+# Global settings instance
 settings = Settings()

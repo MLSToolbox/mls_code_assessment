@@ -5,9 +5,12 @@ WORKDIR /app
 COPY ./requirements.txt /app
 RUN pip3 install -r requirements.txt
 
-COPY ./src /app
+COPY ./src /app/src
 
-ENV EXECUTION_MODE "prod"
+ENV EXECUTION_MODE="prod"
+ENV PYTHONPATH=/app/src
+
+WORKDIR /app/src
 
 ENTRYPOINT ["python3"]
 CMD ["server.py"]

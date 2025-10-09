@@ -7,10 +7,20 @@ from core.exceptions import SessionError
 class FileHandler:
     """Handles file operations for sessions."""
     
+    def __init__(self, base_path: str):
+        """
+        Initialize FileHandler.
+        
+        Args:
+            base_path: Base directory for session workspaces
+        """
+        self.base_path = base_path
+    
     def create_session_workspace(self, session_id: str, app_zip: bytes) -> str:
         """Create workspace and extract ZIP file."""
-        # Use absolute path to avoid issues with changing working directories
-        workspace_path = os.path.abspath(f"./{session_id}")
+        # Use base_path to create session directory
+        workspace_path = os.path.join(self.base_path, session_id)
+        workspace_path = os.path.abspath(workspace_path)
         
         try:
             # Create session directory

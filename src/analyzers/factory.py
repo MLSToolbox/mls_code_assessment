@@ -3,6 +3,8 @@ from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.pylint_analyzer import PyLintAnalyzer
 from analyzers.radon_cc_analyzer import RadonCCAnalyzer
 from analyzers.radon_mi_analyzer import RadonMIAnalyzer
+from analyzers.pipeline_analyzer import PipelineAnalyzer
+
 
 class AnalyzerFactory:
     """Factory for creating analyzer instances."""
@@ -11,6 +13,7 @@ class AnalyzerFactory:
         "pylint": PyLintAnalyzer,
         "radon_cc": RadonCCAnalyzer,
         "radon_mi": RadonMIAnalyzer,
+        "pipeline": PipelineAnalyzer,
     }
     
     @classmethod

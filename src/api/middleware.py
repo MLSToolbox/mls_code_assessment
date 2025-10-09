@@ -24,7 +24,9 @@ def setup_middleware(app: Flask) -> Flask:
     @app.before_request
     def validate_request():
         if request.method == 'POST' and request.path.startswith(f'{config.settings.API_PREFIX}'):
-            if not request.data and request.path != f'{config.settings.API_PREFIX}/analyzers':
+            # Verificar que hay contenido: JSON body, form-data, o archivos
+            has_content = request.data or request.files or request.form
+            if not has_content and request.path != f'{config.settings.API_PREFIX}/analyzers':
                 from api.serializers import ResponseSerializer
                 return ResponseSerializer.error("Request body is required", 400)
     

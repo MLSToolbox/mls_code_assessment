@@ -1,110 +1,95 @@
+"""
+Session Manager Module
+Manages analysis sessions including file handling and analyzer orchestration.
+"""
 import os
 import shutil
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
-from core.models.analysis_result import SessionResult
-from core.exceptions import SessionError, AnalyzerError
-from analyzers.factory import AnalyzerFactory
 from session.file_handler import FileHandler
-from session.cleanup_service import CleanupService
-from utils.validation import validate_session_id
+from analyzers.factory import AnalyzerFactory
+from core.models.analysis_result import AnalysisResult
+from core.exceptions import SessionError
+from session.session_storage import SessionStorage
+
 
 class SessionManager:
-    """Manages analysis sessions with improved architecture."""
+    """
+    Manages a single analysis session.
     
-    def __init__(self, app_zip: bytes, analyzer_types: Optional[List[str]] = None):
+    Handles file extraction, analyzer execution, and session lifecycle.
+    """
+    
+    def __init__(
+        self, 
+        app_zip: Optional[bytes] = None,
+        session_id: Optional[str] = None,
+        analyzer_types: Optional[List[str]] = None,
+        base_path: str = "/tmp"
+    ):
+        """
+        Initialize SessionManager.
+        
+        Args:
+            app_zip: ZIP file content (for new sessions)
+            session_id: Existing session ID (for loading sessions)
+            analyzer_types: List of analyzer types to use
+            base_path: Base path for session storage
+        """
+        # Validate mutually exclusive parameters
+        if app_zip is not None and session_id is not None:
+            raise ValueError("Cannot provide both app_zip and session_id")
+        
+        if app_zip is None and session_id is None:
+            raise ValueError("Must provide either app_zip or session_id")
+        
+        self.base_path = base_path
+        self.analyzer_types = analyzer_types or []
         self.app_zip = app_zip
-        self.session_id = self._generate_session_id()
-        self.local_path = None
-        self.file_handler = FileHandler()
-        self.cleanup_service = CleanupService()
+        self.local_path: Optional[str] = None
+        self.metadata: Optional[Dict[str, Any]] = None
         
-        # Default to all available analyzers
-        self.analyzer_types = analyzer_types or ["pylint", "radon_mi", "radon_cc"]
-        self._validate_analyzers()
+        if session_id:
+            # Load existing session
+            self.session_id = session_id
+            self.load_session()
+        else:
+            # Create new session
+            self.session_id = str(uuid.uuid4())
         
-        self.results: Dict[str, any] = {}
-        self.reports: Dict[str, bytes] = {}
+        self.file_handler = FileHandler(self.base_path)
     
-    def run_analysis(self) -> Dict[str, any]:
-        """Execute analysis with all configured analyzers."""
-        try:
-            self.local_path = self._setup_session()
-            
-            for analyzer_type in self.analyzer_types:
-                analyzer = AnalyzerFactory.create_analyzer(
-                    analyzer_type, self.session_id, self.local_path
-                )
-                
-                try:
-                    result = analyzer.analyze()
-                    self.results[analyzer.analyzer_id] = {
-                        "score": result.score,
-                        "message_count": result.message_count,
-                        "module_count": result.module_count
-                    }
-                except AnalyzerError as e:
-                    self.results[analyzer.analyzer_id] = {
-                        "error": str(e),
-                        "score": 0,
-                        "message_count": {},
-                        "module_count": 0
-                    }
-            
-            return self.results
-            
-        except Exception as e:
-            raise SessionError(f"Analysis failed: {str(e)}")
-    
-    def generate_report(self, analyzer_id: str) -> Optional[bytes]:
-        """Generate detailed report for specific analyzer."""
-        if self.local_path is None:
-            self.local_path = self._setup_session()
+    def load_session(self) -> None:
+        """Load existing session from storage."""
+        self.metadata = SessionStorage.load_metadata(self.session_id, self.base_path)
         
-        try:
-            # Find analyzer type by ID
-            analyzer_type = self._find_analyzer_type(analyzer_id)
-            if not analyzer_type:
-                return None
+        if not self.metadata:
+            raise SessionError(f"Session {self.session_id} not found or expired")
+        
+        self.local_path = self.metadata.get("local_path")
+    
+    @classmethod
+    def load_session(cls, session_id: str, base_path: str = "/tmp") -> 'SessionManager':
+        """
+        Factory method to load existing session.
+        
+        Args:
+            session_id: Session identifier
+            base_path: Base path for session storage
             
-            analyzer = AnalyzerFactory.create_analyzer(
-                analyzer_type, self.session_id, self.local_path
-            )
-            
-            report = analyzer.generate_report()
-            self.reports[analyzer_id] = report
-            return report
-            
-        except AnalyzerError:
-            return None
-    
-    def get_results(self) -> Dict[str, any]:
-        """Get analysis results."""
-        return self.results
-    
-    def get_report(self, analyzer_id: str) -> Optional[bytes]:
-        """Get cached report."""
-        return self.reports.get(analyzer_id)
-    
-    def cleanup(self):
-        """Clean up session resources."""
-        if self.local_path and os.path.exists(self.local_path):
-            self.cleanup_service.cleanup_session(self.local_path)
-    
-    def _generate_session_id(self) -> str:
-        """Generate unique session ID."""
-        return str(uuid.uuid4())
-    
-    def _validate_analyzers(self):
-        """Validate requested analyzers are available."""
-        available = AnalyzerFactory.get_available_analyzers()
-        invalid = [a for a in self.analyzer_types if a.lower() not in available]
-        if invalid:
-            raise SessionError(f"Invalid analyzers: {invalid}")
+        Returns:
+            SessionManager instance
+        """
+        return cls(session_id=session_id, base_path=base_path)
     
     def _setup_session(self) -> str:
-        """Set up session workspace."""
+        """
+        Private method to setup session workspace.
+        
+        Returns:
+            Path to extracted files
+        """
         try:
             local_path = self.file_handler.create_session_workspace(
                 self.session_id, self.app_zip
@@ -112,13 +97,111 @@ class SessionManager:
             return local_path
         except Exception as e:
             raise SessionError(f"Session setup failed: {str(e)}")
-  
-  
-    def _find_analyzer_type(self, analyzer_id: str) -> Optional[str]:
-        """Find analyzer type by ID."""
-        analyzer_id_map = {
-            "PyLint": "pylint",
-            "Radon - Complexity": "radon_cc",
-            "Radon - Maintainability": "radon_mi"
-        }
-        return analyzer_id_map.get(analyzer_id)
+    
+    # ✅ CORRECCIÓN #4: Método público para setup
+    def ensure_setup(self) -> str:
+        """
+        Ensure session is set up and return local path.
+        
+        Public interface for session setup that maintains encapsulation.
+        
+        Returns:
+            Path to extracted files
+        """
+        if self.local_path is None:
+            self.local_path = self._setup_session()
+        return self.local_path
+    
+    def save_session(
+        self, 
+        tree_structure: Dict, 
+        auto_detected_pipeline: Dict,
+        ttl_minutes: int = 60
+    ) -> None:
+        """
+        Save session metadata to persistent storage.
+        
+        Args:
+            tree_structure: File tree structure
+            auto_detected_pipeline: Pipeline detection results
+            ttl_minutes: Session time-to-live in minutes
+        """
+        if not self.local_path:
+            raise SessionError("Session not set up. Call ensure_setup() first.")
+        
+        SessionStorage.save_metadata(
+            session_id=self.session_id,
+            base_path=self.base_path,
+            local_path=self.local_path,
+            tree_structure=tree_structure,
+            auto_detected_pipeline=auto_detected_pipeline,
+            ttl_minutes=ttl_minutes
+        )
+        
+        # Update internal metadata cache
+        self.metadata = SessionStorage.load_metadata(self.session_id, self.base_path)
+    
+    def save_analysis_results(self, results: Dict) -> None:
+        """
+        Save analysis results to session.
+        
+        Args:
+            results: Analysis results dictionary
+        """
+        SessionStorage.update_analysis_results(
+            self.session_id, 
+            self.base_path, 
+            results
+        )
+        
+        # Update internal cache
+        self.metadata = SessionStorage.load_metadata(self.session_id, self.base_path)
+    
+    def get_metadata(self) -> Dict[str, Any]:
+        """
+        Get session metadata.
+        
+        Returns:
+            Session metadata dictionary
+            
+        Raises:
+            SessionError: If session not found or expired
+        """
+        if self.metadata is None:
+            self.metadata = SessionStorage.load_metadata(
+                self.session_id, self.base_path
+            )
+            if self.metadata is None:
+                raise SessionError(f"Session {self.session_id} not found or expired")
+        return self.metadata
+    
+    def run_analysis(self) -> Dict[str, AnalysisResult]:
+        """
+        Execute all configured analyzers.
+        
+        Returns:
+            Dictionary mapping analyzer types to results
+        """
+        if not self.local_path:
+            raise SessionError("Session not set up")
+        
+        results = {}
+        
+        for analyzer_type in self.analyzer_types:
+            analyzer = AnalyzerFactory.create_analyzer(
+                analyzer_type,
+                self.session_id,
+                self.local_path
+            )
+            results[analyzer_type] = analyzer.analyze()
+        
+        return results
+    
+    def cleanup(self) -> None:
+        """Remove session files and metadata."""
+        if self.local_path and os.path.exists(self.local_path):
+            shutil.rmtree(self.local_path)
+        
+        session_dir = os.path.join(self.base_path, self.session_id)
+        if os.path.exists(session_dir):
+            shutil.rmtree(session_dir)
