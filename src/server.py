@@ -1,7 +1,3 @@
-"""
-Flask Application Server
-Main entry point for the MLS Code Assessment API.
-"""
 import logging
 from flask import Flask
 from waitress import serve
@@ -9,7 +5,7 @@ from waitress import serve
 from api.routes import create_routes
 from api.middleware import setup_middleware
 from config.settings import settings
-from session.cleanup_scheduler import start_scheduler  # ✅ CORRECCIÓN #3
+from session.cleanup_scheduler import start_scheduler 
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,7 +22,6 @@ def create_app() -> Flask:
     # Setup routes
     app = create_routes(app)
     
-    # ✅ CORRECCIÓN #3: Inicializar CleanupScheduler
     start_scheduler(
         interval_minutes=settings.CLEANUP_INTERVAL_MINUTES,
         base_path=settings.SESSION_BASE_PATH

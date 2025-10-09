@@ -1,7 +1,3 @@
-"""
-Pipeline Analyzer Module
-Detects and validates ML pipeline structure in Python code.
-"""
 import ast
 import os
 import json
@@ -56,7 +52,6 @@ class PipelineAnalyzer(BaseAnalyzer):
         """Unique identifier for this analyzer."""
         return self._analyzer_id
     
-    # ✅ CORRECCIÓN #5: Firma corregida para recibir PipelineOverrides
     def apply_overrides(
         self, 
         auto_detected: Dict, 
@@ -159,7 +154,6 @@ class PipelineAnalyzer(BaseAnalyzer):
         
         return modified
     
-    # ✅ CORRECCIÓN #7: Lógica de exclusión mejorada
     def _is_excluded(self, filepath: str, patterns: List[str]) -> bool:
         """
         Check if filepath matches exclusion patterns.

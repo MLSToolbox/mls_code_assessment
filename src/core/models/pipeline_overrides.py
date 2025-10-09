@@ -1,7 +1,3 @@
-"""
-Pipeline Overrides Models
-Data models for pipeline override functionality.
-"""
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 

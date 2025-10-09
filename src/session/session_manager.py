@@ -1,7 +1,3 @@
-"""
-Session Manager Module
-Manages analysis sessions including file handling and analyzer orchestration.
-"""
 import os
 import shutil
 import uuid
@@ -98,7 +94,6 @@ class SessionManager:
         except Exception as e:
             raise SessionError(f"Session setup failed: {str(e)}")
     
-    # ✅ CORRECCIÓN #4: Método público para setup
     def ensure_setup(self) -> str:
         """
         Ensure session is set up and return local path.

@@ -1,7 +1,3 @@
-"""
-Application Settings
-Configuration management using environment variables.
-"""
 import os
 from dataclasses import dataclass
 

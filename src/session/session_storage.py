@@ -1,10 +1,6 @@
-"""
-Session Storage Module
-Handles persistence of session metadata using JSON files.
-"""
 import json
 import os
-from datetime import datetime, timedelta, timezone  # ✅ CORRECCIÓN #1
+from datetime import datetime, timedelta, timezone 
 from typing import Dict, Optional, Any
 
 
@@ -36,7 +32,7 @@ class SessionStorage:
         
         metadata_path = os.path.join(session_dir, "metadata.json")
         
-        created_at = datetime.now(timezone.utc)  # ✅ CORRECCIÓN #1
+        created_at = datetime.now(timezone.utc)
         expires_at = created_at + timedelta(minutes=ttl_minutes)
         
         metadata = {
@@ -73,7 +69,6 @@ class SessionStorage:
             with open(metadata_path, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
             
-            # ✅ CORRECCIÓN #2: Comparación consistente con timezone-aware
             expires_at = datetime.fromisoformat(
                 metadata["expires_at"].replace("Z", "+00:00")
             )

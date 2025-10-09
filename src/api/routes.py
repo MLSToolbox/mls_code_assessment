@@ -1,7 +1,3 @@
-"""
-API Routes Module
-Defines all HTTP endpoints for the code assessment service.
-"""
 from flask import Flask, request
 from flask_cors import cross_origin
 from datetime import datetime
@@ -52,7 +48,6 @@ def create_routes(app: Flask) -> Flask:
                 base_path=config.settings.SESSION_BASE_PATH
             )
             
-            # ✅ CORRECCIÓN #6: Usar método público ensure_setup()
             session.ensure_setup()
             
             # Generate file tree
@@ -132,7 +127,6 @@ def create_routes(app: Flask) -> Flask:
                     metadata = session.get_metadata()
                     auto_detected = metadata["auto_detected_pipeline"]
                     
-                    # ✅ CORRECCIÓN #6: Usar firma corregida
                     modified = pipeline_analyzer.apply_overrides(
                         auto_detected=auto_detected,
                         overrides=analysis_request.pipeline_overrides

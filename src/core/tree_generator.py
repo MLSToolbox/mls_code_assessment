@@ -1,7 +1,3 @@
-"""
-Tree Generator Module
-Generates file tree structure from extracted code.
-"""
 import os
 import ast
 from typing import Dict, List

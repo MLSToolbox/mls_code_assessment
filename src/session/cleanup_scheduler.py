@@ -1,7 +1,3 @@
-"""
-Cleanup Scheduler Module
-Background task to clean up expired sessions.
-"""
 import os
 import shutil
 import time
