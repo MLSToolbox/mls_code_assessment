@@ -24,7 +24,7 @@ class Settings:
     # Analyzer configurations
     ANALYZER_CONFIG = {
         "pylint": {
-            "output_format": "json",
+            "output_format": "json2",
             "disable": [
                 "E0401",  # import-error (common in isolated environments)
                 "C0114",  # missing-module-docstring

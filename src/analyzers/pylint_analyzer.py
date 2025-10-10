@@ -81,11 +81,19 @@ class PyLintAnalyzer(BaseAnalyzer):
                         try:
                             parsed = json.loads(result.stdout)
                             
-                            # Pylint JSON format returns a list of messages
-                            # We need to convert it to the expected format with statistics
-                            if isinstance(parsed, list):
+                            # With json2 format, pylint returns a dict with statistics
+                            # No conversion needed
+                            if isinstance(parsed, dict) and "statistics" in parsed:
+                                logger.info(f"PyLint analysis completed: Score={parsed['statistics']['score']:.2f}, "
+                                          f"Modules={parsed['statistics']['modulesLinted']}, "
+                                          f"Messages={len(parsed.get('messages', []))}")
+                                return parsed
+                            
+                            # Fallback: if still getting list format (shouldn't happen with json2)
+                            elif isinstance(parsed, list):
+                                logger.warning("PyLint returned list format, expected json2 dict format")
                                 # Count message types
-                                message_counts = {"convention": 0, "refactor": 0, "warning": 0, "error": 0, "fatal": 0}
+                                message_counts = {"convention": 0, "refactor": 0, "warning": 0, "error": 0, "fatal": 0, "info": 0}
                                 modules = set()
                                 
                                 for msg in parsed:
@@ -94,8 +102,7 @@ class PyLintAnalyzer(BaseAnalyzer):
                                     if "module" in msg:
                                         modules.add(msg["module"])
                                 
-                                # Calculate score (10 - penalties)
-                                # Pylint default: error=-10, warning=-2, refactor=-1, convention=-0.5, fatal=-10
+                                # Calculate score
                                 penalties = (
                                     message_counts["fatal"] * 10 +
                                     message_counts["error"] * 10 +
@@ -106,26 +113,17 @@ class PyLintAnalyzer(BaseAnalyzer):
                                 score = max(0.0, 10.0 - penalties / max(len(modules), 1))
                                 
                                 # Create expected format
-                                converted = {
+                                return {
                                     "messages": parsed,
                                     "statistics": {
                                         "score": round(score, 2),
-                                        "messageTypeCount": {
-                                            "convention": message_counts["convention"],
-                                            "refactor": message_counts["refactor"],
-                                            "warning": message_counts["warning"],
-                                            "error": message_counts["error"],
-                                            "fatal": message_counts["fatal"]
-                                        },
+                                        "messageTypeCount": message_counts,
                                         "modulesLinted": len(modules)
                                     }
                                 }
-                                
-                                logger.info(f"PyLint analysis completed: Score={score:.2f}, Modules={len(modules)}, Issues={len(parsed)}")
-                                return converted
                             else:
-                                # Already in dict format
-                                return parsed
+                                logger.error(f"Unexpected pylint output format: {type(parsed)}")
+                                raise AnalyzerError(f"Unexpected pylint output format: {type(parsed)}")
                                 
                         except json.JSONDecodeError as je:
                             logger.error(f"ERROR parsing stdout JSON: {je}")
