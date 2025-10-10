@@ -1,12 +1,15 @@
 import os
 import subprocess
 import json
+import logging
 from typing import Dict, Any
 
 from analyzers.base_analyzer import BaseAnalyzer
 from core.models.analysis_result import AnalysisResult
 from core.exceptions import AnalyzerError
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 class PyLintAnalyzer(BaseAnalyzer):
     """PyLint code quality analyzer."""
@@ -30,6 +33,8 @@ class PyLintAnalyzer(BaseAnalyzer):
                 details=self._extract_details(json_output)
             )
         except Exception as e:
+            logger.error(f"ERROR in analyze(): {e}", exc_info=True)
+            raise AnalyzerError(f"PyLint analysis failed: {str(e)}")
             raise AnalyzerError(f"PyLint analysis failed: {str(e)}")
     
     def generate_report(self, code_path: str = None) -> bytes:
@@ -43,7 +48,11 @@ class PyLintAnalyzer(BaseAnalyzer):
     
     def _run_pylint_analysis(self, target_path: str) -> Dict[str, Any]:
         """Execute pylint for analysis."""
-        config = settings.get_analyzer_config()["pylint"]
+        try:
+            config = settings.ANALYZER_CONFIG["pylint"]
+        except Exception as e:
+            logger.error(f"ERROR getting config: {e}", exc_info=True)
+            raise
         
         with self._change_to_project_dir():
             folders = self._get_project_folders(target_path)
@@ -59,6 +68,8 @@ class PyLintAnalyzer(BaseAnalyzer):
                         folder
                     ]
                     
+                    logger.info(f"Running pylint on folder: {folder}")
+                    
                     result = subprocess.run(
                         cmd, 
                         capture_output=True, 
@@ -67,11 +78,71 @@ class PyLintAnalyzer(BaseAnalyzer):
                     )
                     
                     if result.stdout:
-                        return json.loads(result.stdout)
+                        try:
+                            parsed = json.loads(result.stdout)
+                            
+                            # Pylint JSON format returns a list of messages
+                            # We need to convert it to the expected format with statistics
+                            if isinstance(parsed, list):
+                                # Count message types
+                                message_counts = {"convention": 0, "refactor": 0, "warning": 0, "error": 0, "fatal": 0}
+                                modules = set()
+                                
+                                for msg in parsed:
+                                    msg_type = msg.get("type", "convention")
+                                    message_counts[msg_type] = message_counts.get(msg_type, 0) + 1
+                                    if "module" in msg:
+                                        modules.add(msg["module"])
+                                
+                                # Calculate score (10 - penalties)
+                                # Pylint default: error=-10, warning=-2, refactor=-1, convention=-0.5, fatal=-10
+                                penalties = (
+                                    message_counts["fatal"] * 10 +
+                                    message_counts["error"] * 10 +
+                                    message_counts["warning"] * 2 +
+                                    message_counts["refactor"] * 1 +
+                                    message_counts["convention"] * 0.5
+                                )
+                                score = max(0.0, 10.0 - penalties / max(len(modules), 1))
+                                
+                                # Create expected format
+                                converted = {
+                                    "messages": parsed,
+                                    "statistics": {
+                                        "score": round(score, 2),
+                                        "messageTypeCount": {
+                                            "convention": message_counts["convention"],
+                                            "refactor": message_counts["refactor"],
+                                            "warning": message_counts["warning"],
+                                            "error": message_counts["error"],
+                                            "fatal": message_counts["fatal"]
+                                        },
+                                        "modulesLinted": len(modules)
+                                    }
+                                }
+                                
+                                logger.info(f"PyLint analysis completed: Score={score:.2f}, Modules={len(modules)}, Issues={len(parsed)}")
+                                return converted
+                            else:
+                                # Already in dict format
+                                return parsed
+                                
+                        except json.JSONDecodeError as je:
+                            logger.error(f"ERROR parsing stdout JSON: {je}")
+                            raise
                     elif result.stderr:
-                        return json.loads(result.stderr)
+                        logger.info(f"DEBUG: Parsing stderr as JSON...")
+                        logger.info(f"DEBUG: First 500 chars of stderr: {result.stderr[:500]}")
+                        try:
+                            parsed = json.loads(result.stderr)
+                            logger.info(f"DEBUG: Successfully parsed JSON from stderr, type: {type(parsed)}")
+                            return parsed
+                        except json.JSONDecodeError as je:
+                            logger.error(f"ERROR parsing stderr JSON: {je}")
+                            raise
                         
                 except (subprocess.SubprocessError, json.JSONDecodeError) as e:
+                    logger.error(f"ERROR in folder {folder}: {e}", exc_info=True)
                     continue  # Try next folder
             
             # If no valid output found

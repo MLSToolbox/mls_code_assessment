@@ -49,15 +49,15 @@ class SessionManager:
         if session_id:
             # Load existing session
             self.session_id = session_id
-            self.load_session()
+            self._load_metadata()
         else:
             # Create new session
             self.session_id = str(uuid.uuid4())
         
         self.file_handler = FileHandler(self.base_path)
     
-    def load_session(self) -> None:
-        """Load existing session from storage."""
+    def _load_metadata(self) -> None:
+        """Load existing session metadata from storage."""
         self.metadata = SessionStorage.load_metadata(self.session_id, self.base_path)
         
         if not self.metadata:

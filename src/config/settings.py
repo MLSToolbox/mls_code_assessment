@@ -1,8 +1,5 @@
 import os
-from dataclasses import dataclass
 
-
-@dataclass
 class Settings:
     """Application configuration settings."""
     
@@ -23,6 +20,29 @@ class Settings:
     
     # CORS settings
     CORS_ORIGINS: str = os.getenv('CORS_ORIGINS', '*')
+    
+    # Analyzer configurations
+    ANALYZER_CONFIG = {
+        "pylint": {
+            "output_format": "json",
+            "disable": [
+                "E0401",  # import-error (common in isolated environments)
+                "C0114",  # missing-module-docstring
+                "C0115",  # missing-class-docstring
+                "C0116"   # missing-function-docstring
+            ]
+        },
+        "radon_cc": {
+            "min": "A",
+            "max": "F",
+            "show_complexity": True
+        },
+        "radon_mi": {
+            "min": "A",
+            "max": "C",
+            "show_complexity": True
+        }
+    }
 
 
 # Global settings instance

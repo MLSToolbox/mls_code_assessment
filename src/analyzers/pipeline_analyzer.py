@@ -316,6 +316,7 @@ class PipelineAnalyzer(BaseAnalyzer):
     def _format_stages(self, stage_files: Dict[str, List[Tuple]]) -> Dict:
         """
         Format stage detection results for API response.
+        Returns only the file with most evidences per stage.
         
         Args:
             stage_files: Raw stage detection results
@@ -335,14 +336,19 @@ class PipelineAnalyzer(BaseAnalyzer):
                     "value": value
                 })
             
-            # Convert to list format
-            formatted[stage] = [
-                {
-                    "file": filepath,
-                    "evidences": evidences
-                }
-                for filepath, evidences in file_evidences.items()
-            ]
+            # Select only the file with most evidences
+            if file_evidences:
+                best_file = max(
+                    file_evidences.items(),
+                    key=lambda x: len(x[1])
+                )
+                
+                formatted[stage] = [
+                    {
+                        "file": best_file[0],
+                        "evidences": best_file[1]
+                    }
+                ]
         
         return formatted
     
