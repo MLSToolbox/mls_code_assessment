@@ -1,4 +1,3 @@
-import os
 import logging
 from flask import Flask
 from waitress import serve
@@ -6,6 +5,7 @@ from waitress import serve
 from api.routes import create_routes
 from api.middleware import setup_middleware
 from config.settings import settings
+from session.cleanup_scheduler import start_scheduler 
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,20 +16,36 @@ def create_app() -> Flask:
     """Create and configure Flask application."""
     app = Flask(__name__)
     
+    # Setup middleware
     app = setup_middleware(app)
     
+    # Setup routes
     app = create_routes(app)
+    
+    start_scheduler(
+        interval_minutes=settings.CLEANUP_INTERVAL_MINUTES,
+        base_path=settings.SESSION_BASE_PATH
+    )
     
     return app
 
-def main():
-    """Main entry point."""
+if __name__ == '__main__':
     app = create_app()
     
-    if settings.EXECUTION_MODE == "prod":
-        serve(app, host=settings.HOST, port=settings.PORT)
+    logging.info(
+        f"Starting server on {settings.HOST}:{settings.PORT}",
+        extra={
+            'host': settings.HOST,
+            'port': settings.PORT,
+            'debug': settings.DEBUG
+        }
+    )
+    
+    if settings.DEBUG:
+        app.run(
+            host=settings.HOST,
+            port=settings.PORT,
+            debug=True
+        )
     else:
-        app.run(host=settings.HOST, port=settings.PORT, debug=True)
-
-if __name__ == '__main__':
-    main()
+        serve(app, host=settings.HOST, port=settings.PORT)
