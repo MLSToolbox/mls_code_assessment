@@ -42,7 +42,8 @@ class RadonCCAnalyzer(BaseAnalyzer):
     def _run_complexity_analysis(self, target_path: str) -> tuple:
         """Execute radon cc analysis."""
         with self._change_to_project_dir():
-            folders = self._get_project_folders(target_path)
+            # After changing to project dir, use current directory
+            folders = self._get_project_folders('.')
             
             for folder in folders:
                 try:
@@ -81,7 +82,8 @@ class RadonCCAnalyzer(BaseAnalyzer):
     def _run_complexity_report(self, target_path: str) -> bytes:
         """Generate detailed complexity report."""
         with self._change_to_project_dir():
-            folders = self._get_project_folders(target_path)
+            # After changing to project dir, use current directory
+            folders = self._get_project_folders('.')
             
             for folder in folders:
                 try:

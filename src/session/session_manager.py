@@ -8,14 +8,11 @@ from analyzers.factory import AnalyzerFactory
 from core.models.analysis_result import AnalysisResult
 from core.exceptions import SessionError
 from session.session_storage import SessionStorage
+from core.analysis_context import AnalysisContext
 
 
 class SessionManager:
-    """
-    Manages a single analysis session.
-    
-    Handles file extraction, analyzer execution, and session lifecycle.
-    """
+    """Manages a single analysis session."""
     
     def __init__(
         self, 
@@ -33,7 +30,6 @@ class SessionManager:
             analyzer_types: List of analyzer types to use
             base_path: Base path for session storage
         """
-        # Validate mutually exclusive parameters
         if app_zip is not None and session_id is not None:
             raise ValueError("Cannot provide both app_zip and session_id")
         
@@ -47,14 +43,15 @@ class SessionManager:
         self.metadata: Optional[Dict[str, Any]] = None
         
         if session_id:
-            # Load existing session
             self.session_id = session_id
             self._load_metadata()
         else:
-            # Create new session
             self.session_id = str(uuid.uuid4())
         
         self.file_handler = FileHandler(self.base_path)
+        
+        # Initialize shared analysis context
+        self.analysis_context: Optional[AnalysisContext] = None
     
     def _load_metadata(self) -> None:
         """Load existing session metadata from storage."""
@@ -106,6 +103,40 @@ class SessionManager:
         if self.local_path is None:
             self.local_path = self._setup_session()
         return self.local_path
+    
+    def run_analysis(self) -> Dict[str, AnalysisResult]:
+        """
+        Run all configured analyzers.
+        
+        Returns:
+            Dictionary mapping analyzer IDs to results
+        """
+        if not self.local_path:
+            self._setup_session()
+        
+        # Initialize shared context once
+        self.analysis_context = AnalysisContext(self.session_id, self.local_path)
+        
+        results = {}
+        
+        for analyzer_type in self.analyzer_types:
+            try:
+                # Inject shared context into each analyzer
+                analyzer = AnalyzerFactory.create_analyzer(
+                    analyzer_type,
+                    self.session_id,
+                    self.local_path,
+                    context=self.analysis_context
+                )
+                
+                result = analyzer.analyze()
+                results[analyzer.analyzer_id] = result
+                
+            except Exception as e:
+                print(f"Error running {analyzer_type}: {e}")
+                # Continue with other analyzers
+        
+        return results
     
     def save_session(
         self, 
@@ -170,33 +201,13 @@ class SessionManager:
                 raise SessionError(f"Session {self.session_id} not found or expired")
         return self.metadata
     
-    def run_analysis(self) -> Dict[str, AnalysisResult]:
-        """
-        Execute all configured analyzers.
-        
-        Returns:
-            Dictionary mapping analyzer types to results
-        """
-        if not self.local_path:
-            raise SessionError("Session not set up")
-        
-        results = {}
-        
-        for analyzer_type in self.analyzer_types:
-            analyzer = AnalyzerFactory.create_analyzer(
-                analyzer_type,
-                self.session_id,
-                self.local_path
-            )
-            results[analyzer_type] = analyzer.analyze()
-        
-        return results
-    
     def cleanup(self) -> None:
-        """Remove session files and metadata."""
+        """Clean up session files and metadata."""
         if self.local_path and os.path.exists(self.local_path):
             shutil.rmtree(self.local_path)
         
-        session_dir = os.path.join(self.base_path, self.session_id)
-        if os.path.exists(session_dir):
-            shutil.rmtree(session_dir)
+        SessionStorage.delete_metadata(self.session_id, self.base_path)
+        
+        # Clear context cache
+        if self.analysis_context:
+            self.analysis_context.clear_cache()
