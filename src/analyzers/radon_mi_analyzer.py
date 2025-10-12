@@ -43,7 +43,8 @@ class RadonMIAnalyzer(BaseAnalyzer):
     def _run_maintainability_analysis(self, target_path: str) -> Dict[str, Any]:
         """Execute radon mi analysis."""
         with self._change_to_project_dir():
-            folders = self._get_project_folders(target_path)
+            # After changing to project dir, use current directory
+            folders = self._get_project_folders('.')
             
             for folder in folders:
                 try:
@@ -67,7 +68,8 @@ class RadonMIAnalyzer(BaseAnalyzer):
     def _run_maintainability_report(self, target_path: str) -> bytes:
         """Generate detailed maintainability report."""
         with self._change_to_project_dir():
-            folders = self._get_project_folders(target_path)
+            # After changing to project dir, use current directory
+            folders = self._get_project_folders('.')
             
             for folder in folders:
                 try:

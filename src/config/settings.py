@@ -1,5 +1,6 @@
 import os
 
+
 class Settings:
     """Application configuration settings."""
     

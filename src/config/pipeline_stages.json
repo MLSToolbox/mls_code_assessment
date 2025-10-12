@@ -1,4 +1,12 @@
 {
+  "phases": {
+    "data_engineering": ["data_collection", "data_cleaning"],
+    "model_development": [
+      "feature_engineering",
+      "model_training",
+      "model_evaluation"
+    ]
+  },
   "stages": {
     "data_collection": {
       "filename_patterns": [

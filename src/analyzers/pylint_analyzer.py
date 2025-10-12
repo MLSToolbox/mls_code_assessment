@@ -35,7 +35,6 @@ class PyLintAnalyzer(BaseAnalyzer):
         except Exception as e:
             logger.error(f"ERROR in analyze(): {e}", exc_info=True)
             raise AnalyzerError(f"PyLint analysis failed: {str(e)}")
-            raise AnalyzerError(f"PyLint analysis failed: {str(e)}")
     
     def generate_report(self, code_path: str = None) -> bytes:
         """Generate detailed PyLint report."""
@@ -55,7 +54,8 @@ class PyLintAnalyzer(BaseAnalyzer):
             raise
         
         with self._change_to_project_dir():
-            folders = self._get_project_folders(target_path)
+            # After changing to project dir, use current directory
+            folders = self._get_project_folders('.')
             
             for folder in folders:
                 try:
@@ -149,7 +149,8 @@ class PyLintAnalyzer(BaseAnalyzer):
     def _run_pylint_report(self, target_path: str) -> bytes:
         """Execute pylint for detailed report."""
         with self._change_to_project_dir():
-            folders = self._get_project_folders(target_path)
+            # After changing to project dir, use current directory
+            folders = self._get_project_folders('.')
             
             for folder in folders:
                 try:
@@ -178,23 +179,6 @@ class PyLintAnalyzer(BaseAnalyzer):
                     continue
             
             raise AnalyzerError("No PyLint report generated")
-    
-    def _get_project_folders(self, target_path: str) -> list:
-        """Get folders containing Python files."""
-        folders = []
-        for item in os.listdir(target_path):
-            item_path = os.path.join(target_path, item)
-            if os.path.isdir(item_path):
-                # Check if folder contains Python files
-                has_python = any(
-                    f.endswith('.py') 
-                    for f in os.listdir(item_path) 
-                    if os.path.isfile(os.path.join(item_path, f))
-                )
-                if has_python:
-                    folders.append(item)
-        
-        return folders or ['.']  # Current directory if no folders found
     
     def _extract_details(self, json_output: Dict[str, Any]) -> Dict[str, Any]:
         """Extract additional details from PyLint output."""
