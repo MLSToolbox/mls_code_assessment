@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple, Set
 from collections import defaultdict
 
 from core.models.analysis_result import AnalysisResult
-from core.models.pipeline_overrides import PipelineOverrides  # ✅ CORRECCIÓN #5
+from core.models.pipeline_overrides import PipelineOverrides 
 from analyzers.base_analyzer import BaseAnalyzer
 
 
@@ -24,19 +24,19 @@ class PipelineAnalyzer(BaseAnalyzer):
         super().__init__(session_id, local_path)
         self._analyzer_id = "Pipeline Structure"
         
-        # Required stages for a valid pipeline
+        
         self.required_stages = {
             "data_collection",
             "model_training",
             "model_evaluation"
         }
         
-        # Load configuration
+        
         if config_path and os.path.exists(config_path):
             with open(config_path, 'r') as f:
                 self.config = json.load(f)
         else:
-            # Default configuration
+            
             config_file = os.path.join(
                 os.path.dirname(__file__), 
                 "../config/pipeline_stages.json"
@@ -70,7 +70,7 @@ class PipelineAnalyzer(BaseAnalyzer):
         file_stages = overrides.file_stages
         excluded_files = overrides.excluded_files
         
-        # Copy original structure
+        
         modified = {
             "is_valid_pipeline": auto_detected["is_valid_pipeline"],
             "detected_stages": {},
@@ -78,25 +78,25 @@ class PipelineAnalyzer(BaseAnalyzer):
             "files_analyzed": auto_detected["files_analyzed"]
         }
         
-        # Process excluded files
+        
         excluded_set = set()
         for pattern in excluded_files:
             excluded_set.add(pattern)
         
-        # Apply file exclusions and manual stage assignments
+        
         for stage, file_list in auto_detected["detected_stages"].items():
             modified["detected_stages"][stage] = []
             
             for file_info in file_list:
                 filepath = file_info["file"]
                 
-                # Check if file should be excluded
+               
                 if self._is_excluded(filepath, list(excluded_set)):
                     continue
                 
-                # Check if file has manual override
+                
                 if filepath in file_stages:
-                    # Only include if this stage is in manual assignment
+                    
                     if stage in file_stages[filepath]:
                         modified["detected_stages"][stage].append({
                             "file": filepath,
@@ -108,10 +108,10 @@ class PipelineAnalyzer(BaseAnalyzer):
                             ]
                         })
                 else:
-                    # Keep auto-detected
+                    
                     modified["detected_stages"][stage].append(file_info)
         
-        # Add manually assigned stages not in auto-detected
+        
         for filepath, stages in file_stages.items():
             if self._is_excluded(filepath, list(excluded_set)):
                 continue
