@@ -16,10 +16,10 @@ def create_app() -> Flask:
     """Create and configure Flask application."""
     app = Flask(__name__)
     
-    
+    # Setup middleware
     app = setup_middleware(app)
     
-    
+    # Setup routes
     app = create_routes(app)
     
     start_scheduler(
@@ -45,8 +45,7 @@ if __name__ == '__main__':
         app.run(
             host=settings.HOST,
             port=settings.PORT,
-            debug=True,
-            use_reloader=True
+            debug=True
         )
     else:
         serve(app, host=settings.HOST, port=settings.PORT)

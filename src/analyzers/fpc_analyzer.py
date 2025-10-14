@@ -15,7 +15,7 @@ class FPCAnalyzer(BaseAnalyzer):
         """Initialize FPCAnalyzer."""
         super().__init__(session_id, local_path, context)
                 
-        
+        # Load pipeline stages configuration
         pipeline_stages_json_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
             'config',
@@ -30,7 +30,7 @@ class FPCAnalyzer(BaseAnalyzer):
                 f"Pipeline stages config not found at {pipeline_stages_json_path}"
             )
 
-      
+        # Build stage to phase mapping from config
         self.stage_to_phase = {}
         for phase, stages in self.config.get('phases', {}).items():
             for stage in stages:
@@ -63,10 +63,10 @@ class FPCAnalyzer(BaseAnalyzer):
             file_result = self._analyze_file(tree, py_file)
             results['files'][py_file] = file_result
             
-            
+            # Cache for other metrics
             self.context.set_file_metric(py_file, 'fpc', file_result)
             
-            
+            # Update summary
             cohesion_level = file_result['cohesion_level']
             if cohesion_level == 'high':
                 results['summary']['high_cohesion'] += 1
@@ -75,7 +75,7 @@ class FPCAnalyzer(BaseAnalyzer):
             else:
                 results['summary']['low_cohesion'] += 1
         
-       
+        # Calculate score
         if results['summary']['total_files'] > 0:
             score = (results['summary']['high_cohesion'] / 
                     results['summary']['total_files']) * 10
@@ -99,9 +99,9 @@ class FPCAnalyzer(BaseAnalyzer):
         function_stages = {}
         for func_name, func_node in functions.items():
             stages = self._detect_stages(func_node, file_path)
-            function_stages[func_name] = list(stages)
+            function_stages[func_name] = stages
         
-        
+        # Count unique stages and phases
         all_stages = set()
         for stages in function_stages.values():
             all_stages.update(stages)
@@ -177,7 +177,7 @@ class FPCAnalyzer(BaseAnalyzer):
             if stage_name in detected_stages:
                 continue
             
-            
+            # Check imports
             for node in ast.walk(func_node):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
@@ -200,7 +200,7 @@ class FPCAnalyzer(BaseAnalyzer):
     def _determine_cohesion_level(self, unique_stages: int, unique_phases: int) -> str:
         """Determine cohesion level based on stages and phases."""
         if unique_stages == 0:
-            return 'high'  
+            return 'high'  # No ML code detected
         elif unique_stages == 1:
             return 'high'
         elif unique_phases == 1:

@@ -99,7 +99,7 @@ class BaseAnalyzer(ABC):
                 if has_python:
                     folders.append(item)
         
-        return folders or ['.'] 
+        return folders or ['.']  # Current directory if no folders found
     
     @property
     @abstractmethod
