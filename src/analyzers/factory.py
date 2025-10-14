@@ -7,7 +7,7 @@ from core.analysis_context import AnalysisContext
 class AnalyzerFactory:
     """Factory for creating analyzer instances."""
     
-   
+    # Cache for lazy-loaded analyzers
     _analyzers: Dict[str, Type[BaseAnalyzer]] = {}
     
     @classmethod
@@ -19,7 +19,6 @@ class AnalyzerFactory:
             from analyzers.radon_mi_analyzer import RadonMIAnalyzer
             from analyzers.pipeline_analyzer import PipelineAnalyzer
             from analyzers.fpc_analyzer import FPCAnalyzer
-            from analyzers.pfp_analyzer import PFPAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
@@ -27,7 +26,6 @@ class AnalyzerFactory:
                 "radon_mi": RadonMIAnalyzer,
                 "pipeline": PipelineAnalyzer,
                 "fpc": FPCAnalyzer,
-                "pfp": PFPAnalyzer
             }
         return cls._analyzers
     

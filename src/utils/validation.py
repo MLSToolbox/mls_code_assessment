@@ -22,7 +22,7 @@ def validate_analysis_request(data: Dict) -> Tuple[bool, str]:
         return False, "At least one analyzer must be specified"
     
     # Validate analyzer types
-    valid_analyzers = {'pylint', 'radon_cc', 'radon_mi', 'pipeline', 'fpc', 'pfp'}
+    valid_analyzers = {'pylint', 'radon_cc', 'radon_mi', 'pipeline', 'fpc'}
     for analyzer in data['analyzers']:
         if analyzer not in valid_analyzers:
             return False, f"Invalid analyzer type: {analyzer}. Valid types: {valid_analyzers}"
