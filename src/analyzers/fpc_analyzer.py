@@ -7,7 +7,6 @@ from collections import defaultdict
 from core.models.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 
-
 class FPCAnalyzer(BaseAnalyzer):
     """Analyzes functional pipeline cohesion of ML code at module and class level."""
     
@@ -51,7 +50,12 @@ class FPCAnalyzer(BaseAnalyzer):
                 'high_cohesion': 0,
                 'medium_cohesion': 0,
                 'low_cohesion': 0,
-                'ml_files_only': False
+                'ml_files_only': False,
+                'by_pattern': {
+                    'functions_only': 0,
+                    'classes_only': 0,
+                    'mixed': 0
+                }
             }
         }
         
@@ -83,10 +87,16 @@ class FPCAnalyzer(BaseAnalyzer):
                 results['summary']['medium_cohesion'] += 1
             else:
                 results['summary']['low_cohesion'] += 1
+            
+            # Count pattern type
+            pattern = file_result.get('pattern', 'functions_only')
+            if pattern in results['summary']['by_pattern']:
+                results['summary']['by_pattern'][pattern] += 1
         
+        # Calculate weighted score based on pattern quality
         if results['summary']['total_files'] > 0:
-            score = (results['summary']['high_cohesion'] / 
-                    results['summary']['total_files']) * 10
+            weighted_score = self._calculate_weighted_score(results)
+            score = weighted_score
         else:
             score = 0
         
@@ -107,6 +117,8 @@ class FPCAnalyzer(BaseAnalyzer):
         If pipeline metadata is available, uses pre-detected stages.
         Otherwise, performs stage detection.
         """
+        pattern = self._classify_file_pattern(tree)
+        
         functions = self._extract_functions(tree)
         
         file_stages_from_pipeline = self._get_file_stages_from_pipeline(file_path)
@@ -131,7 +143,8 @@ class FPCAnalyzer(BaseAnalyzer):
         
         cohesion_level = self._determine_cohesion_level(unique_stages, unique_phases)
         
-        return {
+        result = {
+            'pattern': pattern,
             'unique_stages': unique_stages,
             'unique_phases': unique_phases,
             'stages_detected': list(all_stages),
@@ -140,6 +153,17 @@ class FPCAnalyzer(BaseAnalyzer):
             'function_stages': function_stages,
             'source': 'pipeline_metadata' if file_stages_from_pipeline else 'heuristic'
         }
+        
+        if pattern == 'mixed':
+            num_classes = sum(1 for name in function_stages.keys() if '.' in name)
+            num_functions = len(function_stages) - num_classes
+            result['pattern_info'] = {
+                'classes': num_classes // 2 if num_classes > 0 else 0,  # Approximate class count
+                'functions': num_functions,
+                'recommendation': 'Consider splitting into separate modules for better maintainability'
+            }
+        
+        return result
     
     def _extract_functions(self, tree: ast.Module) -> Dict[str, ast.FunctionDef]:
         """Extract all functions and methods from AST."""
@@ -166,6 +190,36 @@ class FPCAnalyzer(BaseAnalyzer):
         visitor = FunctionVisitor()
         visitor.visit(tree)
         return visitor.functions
+    
+    def _classify_file_pattern(self, tree: ast.Module) -> str:
+        """
+        Classify Python file structure pattern.
+        
+        Args:
+            tree: AST of the file
+            
+        Returns:
+            'functions_only': Only top-level functions (functional style)
+            'classes_only': Only classes with methods (OOP style)
+            'mixed': Mix of classes and top-level functions (monolithic)
+        """
+        has_classes = False
+        has_top_level_functions = False
+        
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, ast.ClassDef):
+                has_classes = True
+            elif isinstance(node, ast.FunctionDef):
+                has_top_level_functions = True
+        
+        if has_classes and not has_top_level_functions:
+            return 'classes_only'
+        elif has_top_level_functions and not has_classes:
+            return 'functions_only'
+        elif has_classes and has_top_level_functions:
+            return 'mixed'
+        else:
+            return 'functions_only'  # Default
     
     def _get_file_stages_from_pipeline(self, file_path: str) -> Set[str]:
         """
@@ -249,6 +303,49 @@ class FPCAnalyzer(BaseAnalyzer):
         else:
             return 'low'
     
+    def _calculate_weighted_score(self, results: Dict) -> float:
+        """
+        Calculate weighted score based on cohesion and code patterns.
+        
+        Pattern weights:
+        - classes_only: 1.0 (best practice - OOP design)
+        - functions_only: 0.9 (acceptable - functional style)
+        - mixed: 0.7 (anti-pattern - penalized)
+        
+        Cohesion scores:
+        - high: 10 points
+        - medium: 6 points
+        - low: 3 points
+        """
+        pattern_weights = {
+            'classes_only': 1.0,
+            'functions_only': 0.9,
+            'mixed': 0.7
+        }
+        
+        cohesion_scores = {
+            'high': 10,
+            'medium': 6,
+            'low': 3
+        }
+        
+        total_weighted_score = 0
+        total_weight = 0
+        
+        for file_data in results['files'].values():
+            pattern = file_data.get('pattern', 'functions_only')
+            cohesion = file_data.get('cohesion_level', 'high')
+            
+            base_score = cohesion_scores.get(cohesion, 10)
+            weight = pattern_weights.get(pattern, 1.0)
+            
+            total_weighted_score += base_score * weight
+            total_weight += 10 * weight  # Max possible per file
+        
+        if total_weight > 0:
+            return round((total_weighted_score / total_weight) * 10, 2)
+        return 0
+    
     def _generate_messages(self, results: Dict) -> List[str]:
         """Generate human-readable messages."""
         messages = []
@@ -262,6 +359,19 @@ class FPCAnalyzer(BaseAnalyzer):
             messages.append(
                 f"Analyzed {summary['total_files']} Python files (no pipeline metadata available)"
             )
+        
+        by_pattern = summary.get('by_pattern', {})
+        if any(by_pattern.values()):
+            pattern_info = []
+            if by_pattern.get('functions_only', 0) > 0:
+                pattern_info.append(f"{by_pattern['functions_only']} functional")
+            if by_pattern.get('classes_only', 0) > 0:
+                pattern_info.append(f"{by_pattern['classes_only']} OOP")
+            if by_pattern.get('mixed', 0) > 0:
+                pattern_info.append(f"{by_pattern['mixed']} mixed")
+            
+            if pattern_info:
+                messages.append(f"Pattern distribution: {', '.join(pattern_info)}")
         
         if summary['high_cohesion'] > 0:
             messages.append(
@@ -285,6 +395,31 @@ class FPCAnalyzer(BaseAnalyzer):
             if low_cohesion_files:
                 messages.append("Files needing refactoring:")
                 for fp in low_cohesion_files[:5]:
-                    messages.append(f"  - {fp}")
+                    file_data = results['files'][fp]
+                    pattern = file_data.get('pattern', 'unknown')
+                    stages = ', '.join(file_data.get('stages_detected', []))
+                    messages.append(f"  - {fp} ({pattern} pattern, stages: {stages})")
+        
+        # Anti-pattern detection: mixed files
+        mixed_files = [
+            fp for fp, data in results['files'].items()
+            if data.get('pattern') == 'mixed'
+        ]
+        if mixed_files:
+            messages.append(f"⚠ Anti-pattern detected: {len(mixed_files)} file(s) use mixed pattern")
+            messages.append("  Recommendation: Separate classes and functions into distinct modules")
+            for fp in mixed_files[:3]:
+                file_data = results['files'][fp]
+                if 'pattern_info' in file_data:
+                    info = file_data['pattern_info']
+                    messages.append(f"  - {fp}: {info.get('classes', 0)} classes + {info.get('functions', 0)} functions")
+        
+        # Best practices recognition
+        oop_files = [
+            fp for fp, data in results['files'].items()
+            if data.get('pattern') == 'classes_only' and data.get('cohesion_level') == 'high'
+        ]
+        if oop_files:
+            messages.append(f"✓ {len(oop_files)} file(s) follow OOP best practices with high cohesion")
         
         return messages
