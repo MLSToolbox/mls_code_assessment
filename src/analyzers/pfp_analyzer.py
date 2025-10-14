@@ -68,6 +68,7 @@ class PFPAnalyzer(BaseAnalyzer):
         n_total = len(modules)
         n_ml = 0
         all_stages: Set[str] = set()
+        
 
         for module_path in modules:
             fpc_result = self.context.get_file_metric(module_path, 'fpc')
@@ -96,6 +97,7 @@ class PFPAnalyzer(BaseAnalyzer):
             "ml_modules": n_ml,
             "unique_stages_found": n_etapas,
             "concentration_factor": round(cf, 4),
+            "stages": sorted(all_stages),
             "pfp_score": round(pfp_score, 4),
             "purity_level": self._get_purity_level(pfp_score)
         }
