@@ -11,7 +11,7 @@ import config.settings as config
 from analyzers.factory import AnalyzerFactory
 from core.tree_generator import TreeGenerator
 from core.models.pipeline_overrides import AnalysisRequest
-from utils.validation import validate_analysis_request
+from utils.validation import validate_analysis_request, validate_zip_file
 
 
 def create_routes(app: Flask) -> Flask:
@@ -27,20 +27,9 @@ def create_routes(app: Flask) -> Flask:
         """
         try:
             # Validate file upload
-            if 'file' not in request.files:
-                return ResponseSerializer.error("No file provided", 400)
-            
-            file = request.files['file']
-            if file.filename == '':
-                return ResponseSerializer.error("Empty filename", 400)
-            
-            if not file.filename.endswith('.zip'):
-                return ResponseSerializer.error("File must be a ZIP archive", 400)
-            
-            # Read ZIP content
-            app_zip = file.read()
-            if not app_zip:
-                return ResponseSerializer.error("Empty ZIP file", 400)
+            app_zip, error = validate_zip_file(request)
+            if error:
+                return ResponseSerializer.error(error, 400)
             
             # Create session
             session = SessionManager(
@@ -114,12 +103,24 @@ def create_routes(app: Flask) -> Flask:
                 base_path=config.settings.SESSION_BASE_PATH
             )
             
+            # Get pipeline metadata from session
+            metadata = session.get_metadata()
+            pipeline_metadata = metadata.get("auto_detected_pipeline")
+            
+            # Create shared analysis context with pipeline metadata
+            from core.analysis_context import AnalysisContext
+            shared_context = AnalysisContext(
+                session_id, 
+                session.local_path,
+                pipeline_metadata=pipeline_metadata
+            )
+            
             results = {}
             
             # Handle pipeline analyzer with overrides
             if "pipeline" in analysis_request.analyzers:
                 pipeline_analyzer = AnalyzerFactory.create_analyzer(
-                    "pipeline", session_id, session.local_path
+                    "pipeline", session_id, session.local_path, shared_context
                 )
                 
                 # Apply overrides if provided
@@ -148,13 +149,13 @@ def create_routes(app: Flask) -> Flask:
                         "details": result.details
                     }
             
-            # Execute other analyzers
+            # Execute other analyzers with shared context
             for analyzer_type in analysis_request.analyzers:
                 if analyzer_type == "pipeline":
                     continue  # Already processed
                 
                 analyzer = AnalyzerFactory.create_analyzer(
-                    analyzer_type, session_id, session.local_path
+                    analyzer_type, session_id, session.local_path, shared_context
                 )
                 result = analyzer.analyze()
                 
@@ -194,17 +195,9 @@ def create_routes(app: Flask) -> Flask:
         
         try:
             # Validate file upload
-            if 'file' not in request.files:
-                return ResponseSerializer.error("No file provided", 400)
-            
-            file = request.files['file']
-            if not file or file.filename == '':
-                return ResponseSerializer.error("No file selected", 400)
-            
-            # Read and validate ZIP
-            app_zip = file.read()
-            if not app_zip:
-                return ResponseSerializer.error("Empty file", 400)
+            app_zip, error = validate_zip_file(request)
+            if error:
+                return ResponseSerializer.error(error, 400)
             
             # Create session with legacy analyzers
             session = SessionManager(

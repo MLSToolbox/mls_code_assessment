@@ -41,18 +41,35 @@ class FPCAnalyzer(BaseAnalyzer):
         return "FPC"
     
     def analyze(self) -> AnalysisResult:
-        """Run FPC analysis on all Python files."""
+        """
+        Run FPC analysis on ML pipeline files.
+        
+        If pipeline metadata is available, analyzes only files detected as part
+        of the ML pipeline. Otherwise falls back to analyzing all Python files.
+        """
         results = {
             'files': {},
             'summary': {
                 'total_files': 0,
                 'high_cohesion': 0,
                 'medium_cohesion': 0,
-                'low_cohesion': 0
+                'low_cohesion': 0,
+                'ml_files_only': False
             }
         }
         
-        python_files = self.context.get_all_python_files()
+        # Try to get ML files from pipeline metadata first
+        ml_files = self.context.get_all_ml_files()
+        
+        if ml_files:
+            # Use only ML-related files detected by PipelineAnalyzer
+            python_files = ml_files
+            results['summary']['ml_files_only'] = True
+        else:
+            # Fallback: analyze all Python files
+            python_files = self.context.get_all_python_files()
+            results['summary']['ml_files_only'] = False
+        
         results['summary']['total_files'] = len(python_files)
         
         for py_file in python_files:
@@ -93,12 +110,26 @@ class FPCAnalyzer(BaseAnalyzer):
         )
     
     def _analyze_file(self, tree: ast.Module, file_path: str) -> Dict:
-        """Analyze a single file for FPC."""
+        """
+        Analyze a single file for FPC.
+        
+        If pipeline metadata is available, uses pre-detected stages.
+        Otherwise, performs stage detection.
+        """
         functions = self._extract_functions(tree)
+        
+        # Try to get pre-detected stages from pipeline metadata
+        file_stages_from_pipeline = self._get_file_stages_from_pipeline(file_path)
         
         function_stages = {}
         for func_name, func_node in functions.items():
-            stages = self._detect_stages(func_node, file_path)
+            if file_stages_from_pipeline:
+                # Use stages detected by PipelineAnalyzer
+                stages = file_stages_from_pipeline
+            else:
+                # Fallback: detect stages manually
+                stages = self._detect_stages(func_node, file_path)
+            
             function_stages[func_name] = stages
         
         # Count unique stages and phases
@@ -119,7 +150,8 @@ class FPCAnalyzer(BaseAnalyzer):
             'stages_detected': list(all_stages),
             'phases_detected': list(all_phases),
             'cohesion_level': cohesion_level,
-            'function_stages': function_stages
+            'function_stages': function_stages,
+            'source': 'pipeline_metadata' if file_stages_from_pipeline else 'heuristic'
         }
     
     def _extract_functions(self, tree: ast.Module) -> Dict[str, ast.FunctionDef]:
@@ -148,6 +180,31 @@ class FPCAnalyzer(BaseAnalyzer):
         visitor = FunctionVisitor()
         visitor.visit(tree)
         return visitor.functions
+    
+    def _get_file_stages_from_pipeline(self, file_path: str) -> Set[str]:
+        """
+        Get stages for a file from pipeline metadata.
+        
+        Args:
+            file_path: Relative path to the file
+            
+        Returns:
+            Set of stage names detected by PipelineAnalyzer, or empty set
+        """
+        pipeline_metadata = self.context.get_pipeline_metadata()
+        if not pipeline_metadata:
+            return set()
+        
+        detected_stages = pipeline_metadata.get("detected_stages", {})
+        file_stages = set()
+        
+        # Search which stages this file belongs to
+        for stage_name, file_list in detected_stages.items():
+            for file_info in file_list:
+                if file_info["file"] == file_path:
+                    file_stages.add(stage_name)
+        
+        return file_stages
     
     def _detect_stages(self, func_node: ast.FunctionDef, file_path: str) -> Set[str]:
         """Detect ML pipeline stages in a function."""
@@ -213,9 +270,15 @@ class FPCAnalyzer(BaseAnalyzer):
         messages = []
         summary = results['summary']
         
-        messages.append(
-            f"Analyzed {summary['total_files']} files for functional pipeline cohesion"
-        )
+        # Add context about analysis scope
+        if summary.get('ml_files_only', False):
+            messages.append(
+                f"✓ Analyzed {summary['total_files']} ML pipeline files (using pipeline detection)"
+            )
+        else:
+            messages.append(
+                f"Analyzed {summary['total_files']} Python files (no pipeline metadata available)"
+            )
         
         if summary['high_cohesion'] > 0:
             messages.append(

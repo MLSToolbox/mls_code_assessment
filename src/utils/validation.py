@@ -85,3 +85,26 @@ def validate_pipeline_overrides(overrides: Dict) -> Tuple[bool, str]:
                 return False, "excluded_files items must be strings"
     
     return True, ""
+
+def validate_zip_file(request):
+    """
+    Validate ZIP file in request.
+    
+    Returns:
+        tuple: (zip_content, error_message) - error_message is None on success
+    """
+    if 'file' not in request.files:
+        return None, "No file provided"
+    
+    file = request.files['file']
+    if not file or file.filename == '':
+        return None, "No file selected"
+    
+    if not file.filename.endswith('.zip'):
+        return None, "File must be a ZIP archive"
+    
+    app_zip = file.read()
+    if not app_zip:
+        return None, "Empty ZIP file"
+    
+    return app_zip, None

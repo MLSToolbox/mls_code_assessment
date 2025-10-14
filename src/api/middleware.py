@@ -21,12 +21,4 @@ def setup_middleware(app: Flask) -> Flask:
         logging.info(f"Response: {response.status_code} - {duration:.3f}s")
         return response
     
-    @app.before_request
-    def validate_request():
-        if request.method == 'POST' and request.path.startswith(f'{config.settings.API_PREFIX}'):
-            has_content = request.data or request.files or request.form
-            if not has_content and request.path != f'{config.settings.API_PREFIX}/analyzers':
-                from api.serializers import ResponseSerializer
-                return ResponseSerializer.error("Request body is required", 400)
-    
     return app
