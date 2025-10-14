@@ -12,10 +12,11 @@ from analyzers.factory import AnalyzerFactory
 from core.tree_generator import TreeGenerator
 from core.models.pipeline_overrides import AnalysisRequest
 from utils.validation import validate_analysis_request
+from core.analysis_context import AnalysisContext 
 
 
 def create_routes(app: Flask) -> Flask:
-    """Create and configure API routes."""
+    
 
     @app.route(f'{config.settings.API_PREFIX}/upload-zip', methods=['POST'])
     @cross_origin()
@@ -26,7 +27,7 @@ def create_routes(app: Flask) -> Flask:
         Returns session_id, tree_structure, and auto_detected_pipeline.
         """
         try:
-            # Validate file upload
+            
             if 'file' not in request.files:
                 return ResponseSerializer.error("No file provided", 400)
             
@@ -37,12 +38,12 @@ def create_routes(app: Flask) -> Flask:
             if not file.filename.endswith('.zip'):
                 return ResponseSerializer.error("File must be a ZIP archive", 400)
             
-            # Read ZIP content
+            
             app_zip = file.read()
             if not app_zip:
                 return ResponseSerializer.error("Empty ZIP file", 400)
             
-            # Create session
+            
             session = SessionManager(
                 app_zip=app_zip,
                 base_path=config.settings.SESSION_BASE_PATH
@@ -50,17 +51,17 @@ def create_routes(app: Flask) -> Flask:
             
             session.ensure_setup()
             
-            # Generate file tree
+            
             tree_generator = TreeGenerator(session.local_path)
             tree_structure = tree_generator.generate()
             
-            # Auto-detect pipeline
+           
             pipeline_analyzer = AnalyzerFactory.create_analyzer(
                 "pipeline", session.session_id, session.local_path
             )
             pipeline_result = pipeline_analyzer.analyze()
             
-            # Save session metadata
+            
             session.save_session(
                 tree_structure=tree_structure,
                 auto_detected_pipeline=pipeline_result.details,
@@ -81,24 +82,13 @@ def create_routes(app: Flask) -> Flask:
     @app.route(f'{config.settings.API_PREFIX}/analyze/<session_id>', methods=['POST'])
     @cross_origin()
     def analyze_session(session_id: str):
-        """
-        Analyze code for existing session with optional overrides.
-        
-        Expects JSON body:
-        {
-          "analyzers": ["pylint", "radon_cc", "pipeline"],
-          "pipeline_overrides": {
-            "file_stages": {"path/to/file.py": ["data_collection"]},
-            "excluded_files": ["tests/", "docs/"]
-          }
-        }
-        """
+       
         try:
-            # Validate session exists
+  
             if not SessionStorage.exists(session_id, config.settings.SESSION_BASE_PATH):
                 return ResponseSerializer.error("Session not found or expired", 404)
             
-            # Parse and validate request
+            
             data = request.get_json()
             if not data:
                 return ResponseSerializer.error("Request body required", 400)
@@ -108,7 +98,7 @@ def create_routes(app: Flask) -> Flask:
                 return ResponseSerializer.error(error_msg, 400)
             
             analysis_request = AnalysisRequest.from_dict(data)
-            # Load existing session
+            
             session = SessionManager.load_session(
                 session_id, 
                 base_path=config.settings.SESSION_BASE_PATH
@@ -116,13 +106,15 @@ def create_routes(app: Flask) -> Flask:
             
             results = {}
             
-            # Handle pipeline analyzer with overrides
+           
+            shared_context = AnalysisContext(session.session_id, session.local_path)
+            
+            
             if "pipeline" in analysis_request.analyzers:
                 pipeline_analyzer = AnalyzerFactory.create_analyzer(
-                    "pipeline", session_id, session.local_path
+                    "pipeline", session_id, session.local_path, context=shared_context
                 )
                 
-                # Apply overrides if provided
                 if analysis_request.pipeline_overrides:
                     metadata = session.get_metadata()
                     auto_detected = metadata["auto_detected_pipeline"]
@@ -139,7 +131,6 @@ def create_routes(app: Flask) -> Flask:
                         "details": modified
                     }
                 else:
-                    # No overrides, use fresh analysis
                     result = pipeline_analyzer.analyze()
                     results["pipeline"] = {
                         "score": result.score,
@@ -148,23 +139,25 @@ def create_routes(app: Flask) -> Flask:
                         "details": result.details
                     }
             
-            # Execute other analyzers
+           
             for analyzer_type in analysis_request.analyzers:
                 if analyzer_type == "pipeline":
                     continue  # Already processed
                 
+               
                 analyzer = AnalyzerFactory.create_analyzer(
-                    analyzer_type, session_id, session.local_path
+                    analyzer_type, session_id, session.local_path, context=shared_context
                 )
                 result = analyzer.analyze()
                 
-                results[analyzer_type] = {
+                results[analyzer.analyzer_id] = {
                     "score": result.score,
                     "message_count": result.message_count,
-                    "module_count": result.module_count
+                    "module_count": result.module_count,
+                    "details": result.details
                 }
             
-            # Save results to session
+            
             session.save_analysis_results(results)
             
             return ResponseSerializer.success({
@@ -176,9 +169,11 @@ def create_routes(app: Flask) -> Flask:
         except SessionError as e:
             return ResponseSerializer.error(f"Session error: {str(e)}", 400)
         except Exception as e:
+            if config.settings.DEBUG:
+                app.logger.error("Analysis failed with exception:", exc_info=True)
             return ResponseSerializer.error(f"Analysis failed: {str(e)}", 500)
 
-    # Legacy endpoint (deprecated)
+    
     @app.route(f'{config.settings.API_PREFIX}/rate_app', methods=['POST'])
     @cross_origin()
     def rate_app():
@@ -193,7 +188,7 @@ def create_routes(app: Flask) -> Flask:
         )
         
         try:
-            # Validate file upload
+            
             if 'file' not in request.files:
                 return ResponseSerializer.error("No file provided", 400)
             
@@ -201,12 +196,12 @@ def create_routes(app: Flask) -> Flask:
             if not file or file.filename == '':
                 return ResponseSerializer.error("No file selected", 400)
             
-            # Read and validate ZIP
+            
             app_zip = file.read()
             if not app_zip:
                 return ResponseSerializer.error("Empty file", 400)
             
-            # Create session with legacy analyzers
+           
             session = SessionManager(
                 app_zip=app_zip,
                 analyzer_types=['pylint', 'radon_cc', 'radon_mi'],
@@ -215,10 +210,10 @@ def create_routes(app: Flask) -> Flask:
             
             session.ensure_setup()
             
-            # Run analysis
+            
             results = session.run_analysis()
             
-            # Format legacy response
+            
             legacy_response = {
                 "session_id": session.session_id,
                 "results": {
