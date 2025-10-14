@@ -43,7 +43,6 @@ class RadonMIAnalyzer(BaseAnalyzer):
     def _run_maintainability_analysis(self, target_path: str) -> Dict[str, Any]:
         """Execute radon mi analysis."""
         with self._change_to_project_dir():
-            # After changing to project dir, use current directory
             folders = self._get_project_folders('.')
             
             for folder in folders:
@@ -68,7 +67,6 @@ class RadonMIAnalyzer(BaseAnalyzer):
     def _run_maintainability_report(self, target_path: str) -> bytes:
         """Generate detailed maintainability report."""
         with self._change_to_project_dir():
-            # After changing to project dir, use current directory
             folders = self._get_project_folders('.')
             
             for folder in folders:
@@ -107,11 +105,9 @@ class RadonMIAnalyzer(BaseAnalyzer):
             mi_score = float(module_data['mi'])
             rank = module_data.get('rank', 'C')
             
-            # Update counters
             total_score += mi_score / 10.0  # Normalize to 0-10 scale
             valid_modules += 1
             
-            # Count ranks
             if rank == 'A':
                 rank_counts["Very High"] += 1
             elif rank == 'B':
@@ -119,7 +115,6 @@ class RadonMIAnalyzer(BaseAnalyzer):
             elif rank == 'C':
                 rank_counts["Extremely low"] += 1
             
-            # Store module details
             module_details[module_path] = {
                 "mi_score": mi_score,
                 "rank": rank

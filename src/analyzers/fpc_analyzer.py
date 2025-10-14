@@ -9,13 +9,11 @@ from analyzers.base_analyzer import BaseAnalyzer
 
 
 class FPCAnalyzer(BaseAnalyzer):
-    """Analyzes functional pipeline cohesion of ML code."""
+    """Analyzes functional pipeline cohesion of ML code at module and class level."""
     
     def __init__(self, session_id: str, local_path: str, context=None):
-        """Initialize FPCAnalyzer."""
         super().__init__(session_id, local_path, context)
                 
-        # Load pipeline stages configuration
         pipeline_stages_json_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
             'config',
@@ -30,7 +28,6 @@ class FPCAnalyzer(BaseAnalyzer):
                 f"Pipeline stages config not found at {pipeline_stages_json_path}"
             )
 
-        # Build stage to phase mapping from config
         self.stage_to_phase = {}
         for phase, stages in self.config.get('phases', {}).items():
             for stage in stages:
@@ -58,15 +55,12 @@ class FPCAnalyzer(BaseAnalyzer):
             }
         }
         
-        # Try to get ML files from pipeline metadata first
         ml_files = self.context.get_all_ml_files()
         
         if ml_files:
-            # Use only ML-related files detected by PipelineAnalyzer
             python_files = ml_files
             results['summary']['ml_files_only'] = True
         else:
-            # Fallback: analyze all Python files
             python_files = self.context.get_all_python_files()
             results['summary']['ml_files_only'] = False
         
@@ -80,10 +74,8 @@ class FPCAnalyzer(BaseAnalyzer):
             file_result = self._analyze_file(tree, py_file)
             results['files'][py_file] = file_result
             
-            # Cache for other metrics
             self.context.set_file_metric(py_file, 'fpc', file_result)
             
-            # Update summary
             cohesion_level = file_result['cohesion_level']
             if cohesion_level == 'high':
                 results['summary']['high_cohesion'] += 1
@@ -92,7 +84,6 @@ class FPCAnalyzer(BaseAnalyzer):
             else:
                 results['summary']['low_cohesion'] += 1
         
-        # Calculate score
         if results['summary']['total_files'] > 0:
             score = (results['summary']['high_cohesion'] / 
                     results['summary']['total_files']) * 10
@@ -118,21 +109,17 @@ class FPCAnalyzer(BaseAnalyzer):
         """
         functions = self._extract_functions(tree)
         
-        # Try to get pre-detected stages from pipeline metadata
         file_stages_from_pipeline = self._get_file_stages_from_pipeline(file_path)
         
         function_stages = {}
         for func_name, func_node in functions.items():
             if file_stages_from_pipeline:
-                # Use stages detected by PipelineAnalyzer
                 stages = file_stages_from_pipeline
             else:
-                # Fallback: detect stages manually
                 stages = self._detect_stages(func_node, file_path)
             
             function_stages[func_name] = stages
         
-        # Count unique stages and phases
         all_stages = set()
         for stages in function_stages.values():
             all_stages.update(stages)
@@ -156,7 +143,6 @@ class FPCAnalyzer(BaseAnalyzer):
     
     def _extract_functions(self, tree: ast.Module) -> Dict[str, ast.FunctionDef]:
         """Extract all functions and methods from AST."""
-        functions = {}
         
         class FunctionVisitor(ast.NodeVisitor):
             def __init__(self):
@@ -198,7 +184,6 @@ class FPCAnalyzer(BaseAnalyzer):
         detected_stages = pipeline_metadata.get("detected_stages", {})
         file_stages = set()
         
-        # Search which stages this file belongs to
         for stage_name, file_list in detected_stages.items():
             for file_info in file_list:
                 if file_info["file"] == file_path:
@@ -234,7 +219,6 @@ class FPCAnalyzer(BaseAnalyzer):
             if stage_name in detected_stages:
                 continue
             
-            # Check imports
             for node in ast.walk(func_node):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
@@ -270,7 +254,6 @@ class FPCAnalyzer(BaseAnalyzer):
         messages = []
         summary = results['summary']
         
-        # Add context about analysis scope
         if summary.get('ml_files_only', False):
             messages.append(
                 f"✓ Analyzed {summary['total_files']} ML pipeline files (using pipeline detection)"

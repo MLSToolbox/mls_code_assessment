@@ -16,10 +16,8 @@ def create_app() -> Flask:
     """Create and configure Flask application."""
     app = Flask(__name__)
     
-    # Setup middleware
     app = setup_middleware(app)
     
-    # Setup routes
     app = create_routes(app)
     
     start_scheduler(

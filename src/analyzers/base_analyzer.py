@@ -90,7 +90,6 @@ class BaseAnalyzer(ABC):
         for item in os.listdir(target_path):
             item_path = os.path.join(target_path, item)
             if os.path.isdir(item_path):
-                # Check if folder contains Python files
                 has_python = any(
                     f.endswith('.py') 
                     for f in os.listdir(item_path) 
@@ -99,7 +98,7 @@ class BaseAnalyzer(ABC):
                 if has_python:
                     folders.append(item)
         
-        return folders or ['.']  # Current directory if no folders found
+        return folders or ['.']
     
     @property
     @abstractmethod

@@ -11,7 +11,6 @@ def validate_analysis_request(data: Dict) -> Tuple[bool, str]:
     Returns:
         Tuple of (is_valid, error_message)
     """
-    # Check required fields
     if 'analyzers' not in data:
         return False, "Missing required field: analyzers"
     
@@ -21,13 +20,11 @@ def validate_analysis_request(data: Dict) -> Tuple[bool, str]:
     if len(data['analyzers']) == 0:
         return False, "At least one analyzer must be specified"
     
-    # Validate analyzer types
     valid_analyzers = {'pylint', 'radon_cc', 'radon_mi', 'pipeline', 'fpc'}
     for analyzer in data['analyzers']:
         if analyzer not in valid_analyzers:
             return False, f"Invalid analyzer type: {analyzer}. Valid types: {valid_analyzers}"
     
-    # Validate overrides if present
     if 'pipeline_overrides' in data:
         is_valid, error = validate_pipeline_overrides(data['pipeline_overrides'])
         if not is_valid:
@@ -49,14 +46,12 @@ def validate_pipeline_overrides(overrides: Dict) -> Tuple[bool, str]:
     if not isinstance(overrides, dict):
         return False, "pipeline_overrides must be an object"
     
-    # Validate file_stages if present
     if 'file_stages' in overrides:
         file_stages = overrides['file_stages']
         
         if not isinstance(file_stages, dict):
             return False, "file_stages must be an object"
         
-        # Valid stage names (includes optional stages)
         valid_stages = {
             "data_collection",
             "data_cleaning",        # Optional
@@ -73,7 +68,6 @@ def validate_pipeline_overrides(overrides: Dict) -> Tuple[bool, str]:
                 if stage not in valid_stages:
                     return False, f"Invalid stage '{stage}'. Valid stages: {valid_stages}"
     
-    # Validate excluded_files if present
     if 'excluded_files' in overrides:
         excluded = overrides['excluded_files']
         

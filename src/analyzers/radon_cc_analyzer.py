@@ -42,7 +42,6 @@ class RadonCCAnalyzer(BaseAnalyzer):
     def _run_complexity_analysis(self, target_path: str) -> tuple:
         """Execute radon cc analysis."""
         with self._change_to_project_dir():
-            # After changing to project dir, use current directory
             folders = self._get_project_folders('.')
             
             for folder in folders:
@@ -56,20 +55,16 @@ class RadonCCAnalyzer(BaseAnalyzer):
                         check=True
                     )
                     
-                    # Parse output: last two lines contain blocks and complexity
                     lines = result.stdout.strip().split('\n')
                     if len(lines) >= 2:
                         blocks_line = lines[-2]
                         complexity_line = lines[-1]
                         
-                        # Extract block count
                         blocks = int(blocks_line.split()[0])
                         
-                        # Extract complexity score
                         complexity_str = complexity_line.split('(')[-1].rstrip(')')
                         complexity = float(complexity_str)
                         
-                        # Calculate score (inverse relationship with complexity)
                         score = round(10 / pow(complexity, 0.3), 2)
                         
                         return score, blocks
@@ -82,7 +77,6 @@ class RadonCCAnalyzer(BaseAnalyzer):
     def _run_complexity_report(self, target_path: str) -> bytes:
         """Generate detailed complexity report."""
         with self._change_to_project_dir():
-            # After changing to project dir, use current directory
             folders = self._get_project_folders('.')
             
             for folder in folders:

@@ -6,7 +6,6 @@ class ResponseSerializer:
     
     @staticmethod
     def success(data: Any, status_code: int = 200):
-        """Create success response."""
         response = jsonify({
             "success": True,
             "data": data
@@ -16,7 +15,6 @@ class ResponseSerializer:
     
     @staticmethod
     def error(message: str, status_code: int = 400, details: Dict = None):
-        """Create error response."""
         error_data = {"message": message}
         if details:
             error_data["details"] = details

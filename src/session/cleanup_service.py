@@ -36,12 +36,10 @@ class CleanupService:
                 if os.path.isdir(item) and self._looks_like_session_id(item):
                     item_path = os.path.join('.', item)
                     
-                    # Check if session is old
                     if (current_time - os.path.getctime(item_path) > 
                         settings.MAX_SESSION_LIFETIME):
                         self.cleanup_session(item_path)
             
-            # Schedule next cleanup
             timer = threading.Timer(settings.CLEANUP_INTERVAL, cleanup_old_sessions)
             timer.daemon = True
             timer.start()

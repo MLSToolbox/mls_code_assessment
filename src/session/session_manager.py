@@ -50,7 +50,6 @@ class SessionManager:
         
         self.file_handler = FileHandler(self.base_path)
         
-        # Initialize shared analysis context
         self.analysis_context: Optional[AnalysisContext] = None
     
     def _load_metadata(self) -> None:
@@ -114,14 +113,12 @@ class SessionManager:
         if not self.local_path:
             self._setup_session()
         
-        # Initialize shared context once
         self.analysis_context = AnalysisContext(self.session_id, self.local_path)
         
         results = {}
         
         for analyzer_type in self.analyzer_types:
             try:
-                # Inject shared context into each analyzer
                 analyzer = AnalyzerFactory.create_analyzer(
                     analyzer_type,
                     self.session_id,
@@ -164,7 +161,6 @@ class SessionManager:
             ttl_minutes=ttl_minutes
         )
         
-        # Update internal metadata cache
         self.metadata = SessionStorage.load_metadata(self.session_id, self.base_path)
     
     def save_analysis_results(self, results: Dict) -> None:
@@ -180,7 +176,6 @@ class SessionManager:
             results
         )
         
-        # Update internal cache
         self.metadata = SessionStorage.load_metadata(self.session_id, self.base_path)
     
     def get_metadata(self) -> Dict[str, Any]:
@@ -208,6 +203,5 @@ class SessionManager:
         
         SessionStorage.delete_metadata(self.session_id, self.base_path)
         
-        # Clear context cache
         if self.analysis_context:
             self.analysis_context.clear_cache()

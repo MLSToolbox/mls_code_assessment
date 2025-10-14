@@ -5,7 +5,6 @@ import time
 import config.settings as config
 
 def setup_middleware(app: Flask) -> Flask:
-    """Configure middleware for the Flask app."""
     
     CORS(app, supports_credentials=True, origins=['*'])
     app.config["CORS_HEADERS"] = ["Content-Type", "X-Requested-With", "X-CSRFToken"]

@@ -215,7 +215,6 @@ class AnalysisContext:
         detected_stages = self._pipeline_metadata.get("detected_stages", {})
         
         if stage:
-            # Return only specific stage
             if stage in detected_stages:
                 files = [
                     file_info["file"] 
@@ -224,7 +223,6 @@ class AnalysisContext:
                 return {stage: files}
             return {}
         
-        # Return all stages
         result = {}
         for stage_name, file_list in detected_stages.items():
             result[stage_name] = [

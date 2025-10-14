@@ -54,7 +54,6 @@ class PyLintAnalyzer(BaseAnalyzer):
             raise
         
         with self._change_to_project_dir():
-            # After changing to project dir, use current directory
             folders = self._get_project_folders('.')
             
             for folder in folders:
@@ -81,18 +80,14 @@ class PyLintAnalyzer(BaseAnalyzer):
                         try:
                             parsed = json.loads(result.stdout)
                             
-                            # With json2 format, pylint returns a dict with statistics
-                            # No conversion needed
                             if isinstance(parsed, dict) and "statistics" in parsed:
                                 logger.info(f"PyLint analysis completed: Score={parsed['statistics']['score']:.2f}, "
                                           f"Modules={parsed['statistics']['modulesLinted']}, "
                                           f"Messages={len(parsed.get('messages', []))}")
                                 return parsed
                             
-                            # Fallback: if still getting list format (shouldn't happen with json2)
                             elif isinstance(parsed, list):
                                 logger.warning("PyLint returned list format, expected json2 dict format")
-                                # Count message types
                                 message_counts = {"convention": 0, "refactor": 0, "warning": 0, "error": 0, "fatal": 0, "info": 0}
                                 modules = set()
                                 
@@ -102,7 +97,6 @@ class PyLintAnalyzer(BaseAnalyzer):
                                     if "module" in msg:
                                         modules.add(msg["module"])
                                 
-                                # Calculate score
                                 penalties = (
                                     message_counts["fatal"] * 10 +
                                     message_counts["error"] * 10 +
@@ -112,7 +106,6 @@ class PyLintAnalyzer(BaseAnalyzer):
                                 )
                                 score = max(0.0, 10.0 - penalties / max(len(modules), 1))
                                 
-                                # Create expected format
                                 return {
                                     "messages": parsed,
                                     "statistics": {
@@ -143,13 +136,11 @@ class PyLintAnalyzer(BaseAnalyzer):
                     logger.error(f"ERROR in folder {folder}: {e}", exc_info=True)
                     continue  # Try next folder
             
-            # If no valid output found
             raise AnalyzerError("No valid PyLint output generated")
     
     def _run_pylint_report(self, target_path: str) -> bytes:
         """Execute pylint for detailed report."""
         with self._change_to_project_dir():
-            # After changing to project dir, use current directory
             folders = self._get_project_folders('.')
             
             for folder in folders:
