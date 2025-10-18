@@ -7,8 +7,8 @@ from collections import defaultdict
 from core.models.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 
+
 class FPCAnalyzer(BaseAnalyzer):
-    """Analyzes functional pipeline cohesion of ML code at module and class level."""
     
     def __init__(self, session_id: str, local_path: str, context=None):
         super().__init__(session_id, local_path, context)
@@ -34,7 +34,7 @@ class FPCAnalyzer(BaseAnalyzer):
     
     @property
     def analyzer_id(self) -> str:
-        return "FPC"
+        return "fpc"
     
     def analyze(self) -> AnalysisResult:
         """
@@ -102,8 +102,7 @@ class FPCAnalyzer(BaseAnalyzer):
         
         messages = self._generate_messages(results)
         
-        return AnalysisResult(
-            analyzer_id=self.analyzer_id,
+        return self._create_result(
             score=round(score, 2),
             message_count={'messages': messages},
             module_count=results['summary']['total_files'],

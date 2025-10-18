@@ -6,24 +6,22 @@ from analyzers.base_analyzer import BaseAnalyzer
 from core.models.analysis_result import AnalysisResult
 from core.exceptions import AnalyzerError
 
+
 class RadonCCAnalyzer(BaseAnalyzer):
-    """Radon Cyclomatic Complexity analyzer."""
     
     @property
     def analyzer_id(self) -> str:
-        return "Radon - Complexity"
+        return "radon_cc"
     
     def analyze(self, code_path: str = None) -> AnalysisResult:
-        """Analyze cyclomatic complexity using Radon."""
         target_path = code_path or self.local_path
         
         try:
             complexity_score, block_count = self._run_complexity_analysis(target_path)
             
-            return AnalysisResult(
-                analyzer_id=self.analyzer_id,
+            return self._create_result(
                 score=complexity_score,
-                message_count={},  # Radon CC doesn't provide message counts
+                message_count={},
                 module_count=block_count,
                 details={"complexity_method": "cyclomatic"}
             )

@@ -7,22 +7,20 @@ from analyzers.base_analyzer import BaseAnalyzer
 from core.models.analysis_result import AnalysisResult
 from core.exceptions import AnalyzerError
 
+
 class RadonMIAnalyzer(BaseAnalyzer):
-    """Radon Maintainability Index analyzer."""
     
     @property
     def analyzer_id(self) -> str:
-        return "Radon - Maintainability"
+        return "radon_mi"
     
     def analyze(self, code_path: str = None) -> AnalysisResult:
-        """Analyze maintainability using Radon."""
         target_path = code_path or self.local_path
         
         try:
             mi_data = self._run_maintainability_analysis(target_path)
             
-            return AnalysisResult(
-                analyzer_id=self.analyzer_id,
+            return self._create_result(
                 score=mi_data["average_score"],
                 message_count=mi_data["rank_counts"],
                 module_count=mi_data["module_count"],

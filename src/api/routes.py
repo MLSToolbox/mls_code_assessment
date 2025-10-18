@@ -11,6 +11,8 @@ import config.settings as config
 from analyzers.factory import AnalyzerFactory
 from core.tree_generator import TreeGenerator
 from core.models.pipeline_overrides import AnalysisRequest
+from core.models.analysis_result import AnalysisResult
+from core.metrics import get_metric_metadata
 from utils.validation import validate_analysis_request, validate_zip_file
 
 
@@ -121,42 +123,39 @@ def create_routes(app: Flask) -> Flask:
                         overrides=analysis_request.pipeline_overrides
                     )
                     
-                    results["pipeline"] = {
-                        "score": 10.0 if modified["is_valid_pipeline"] else 0.0,
-                        "message_count": {},
-                        "module_count": modified.get("files_analyzed", 0),
-                        "details": modified
-                    }
+                    results["pipeline"] = AnalysisResult(
+                        analyzer_id="pipeline_detection",
+                        score=10.0 if modified["is_valid_pipeline"] else 0.0,
+                        message_count={},
+                        module_count=modified.get("files_analyzed", 0),
+                        metric_metadata=get_metric_metadata("pipeline_detection"),
+                        details=modified
+                    )
                 else:
-                    result = pipeline_analyzer.analyze()
-                    results["pipeline"] = {
-                        "score": result.score,
-                        "message_count": result.message_count,
-                        "module_count": result.module_count,
-                        "details": result.details
-                    }
+                    results["pipeline"] = pipeline_analyzer.analyze()
             
             for analyzer_type in analysis_request.analyzers:
                 if analyzer_type == "pipeline":
-                    continue  # Already processed
+                    continue
                 
                 analyzer = AnalyzerFactory.create_analyzer(
                     analyzer_type, session_id, session.local_path, shared_context
                 )
                 result = analyzer.analyze()
                 
-                results[analyzer_type] = {
-                    "score": result.score,
-                    "message_count": result.message_count,
-                    "module_count": result.module_count
-                }
+                results[analyzer_type] = result
             
-            session.save_analysis_results(results)
+            serialized_results = {
+                key: value.to_dict() if isinstance(value, AnalysisResult) else value
+                for key, value in results.items()
+            }
+            
+            session.save_analysis_results(serialized_results)
             
             return ResponseSerializer.success({
                 "session_id": session_id,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
-                "results": results
+                "results": serialized_results
             })
             
         except SessionError as e:

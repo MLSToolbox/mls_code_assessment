@@ -11,22 +11,20 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+
 class PyLintAnalyzer(BaseAnalyzer):
-    """PyLint code quality analyzer."""
     
     @property
     def analyzer_id(self) -> str:
-        return "PyLint"
+        return "pylint_score"
     
     def analyze(self, code_path: str = None) -> AnalysisResult:
-        """Analyze code using PyLint."""
         target_path = code_path or self.local_path
         
         try:
             json_output = self._run_pylint_analysis(target_path)
             
-            return AnalysisResult(
-                analyzer_id=self.analyzer_id,
+            return self._create_result(
                 score=json_output["statistics"]["score"],
                 message_count=json_output["statistics"]["messageTypeCount"],
                 module_count=json_output["statistics"]["modulesLinted"],
