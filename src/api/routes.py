@@ -12,6 +12,7 @@ from analyzers.factory import AnalyzerFactory
 from core.tree_generator import TreeGenerator
 from core.models.pipeline_overrides import AnalysisRequest
 from utils.validation import validate_analysis_request
+from core.analysis_context import AnalysisContext
 
 
 def create_routes(app: Flask) -> Flask:
@@ -86,7 +87,7 @@ def create_routes(app: Flask) -> Flask:
         
         Expects JSON body:
         {
-          "analyzers": ["pylint", "radon_cc", "pipeline"],
+          "analyzers": ["pylint", "radon_cc", "pipeline",],
           "pipeline_overrides": {
             "file_stages": {"path/to/file.py": ["data_collection"]},
             "excluded_files": ["tests/", "docs/"]
@@ -115,11 +116,12 @@ def create_routes(app: Flask) -> Flask:
             )
             
             results = {}
+            shared_context = AnalysisContext(session.session_id, session.local_path)
             
             # Handle pipeline analyzer with overrides
             if "pipeline" in analysis_request.analyzers:
                 pipeline_analyzer = AnalyzerFactory.create_analyzer(
-                    "pipeline", session_id, session.local_path
+                    "pipeline", session_id, session.local_path,context=shared_context
                 )
                 
                 # Apply overrides if provided
@@ -151,20 +153,24 @@ def create_routes(app: Flask) -> Flask:
             # Execute other analyzers
             for analyzer_type in analysis_request.analyzers:
                 if analyzer_type == "pipeline":
-                    continue  # Already processed
+                    continue 
                 
                 analyzer = AnalyzerFactory.create_analyzer(
-                    analyzer_type, session_id, session.local_path
+                    analyzer_type, session_id, session.local_path,context=shared_context
                 )
                 result = analyzer.analyze()
+                print(result.details)
+               
                 
                 results[analyzer_type] = {
                     "score": result.score,
                     "message_count": result.message_count,
-                    "module_count": result.module_count
+                    "module_count": result.module_count,
+                   
                 }
             
-            # Save results to session
+
+           
             session.save_analysis_results(results)
             
             return ResponseSerializer.success({
@@ -176,6 +182,7 @@ def create_routes(app: Flask) -> Flask:
         except SessionError as e:
             return ResponseSerializer.error(f"Session error: {str(e)}", 400)
         except Exception as e:
+            print(e)
             return ResponseSerializer.error(f"Analysis failed: {str(e)}", 500)
 
     # Legacy endpoint (deprecated)

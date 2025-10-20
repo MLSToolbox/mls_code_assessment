@@ -41,11 +41,12 @@ if __name__ == '__main__':
         }
     )
     
-    if settings.DEBUG:
+    if True:
         app.run(
             host=settings.HOST,
             port=settings.PORT,
-            debug=True
+            debug=True,
+            use_reloader=True
         )
     else:
         serve(app, host=settings.HOST, port=settings.PORT)

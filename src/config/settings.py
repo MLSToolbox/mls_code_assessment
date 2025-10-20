@@ -4,6 +4,7 @@ import os
 class Settings:
     """Application configuration settings."""
     
+    
     # Server settings
     HOST: str = os.getenv('HOST', '0.0.0.0')
     PORT: int = int(os.getenv('PORT', '5060'))

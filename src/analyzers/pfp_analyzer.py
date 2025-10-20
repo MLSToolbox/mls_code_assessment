@@ -54,21 +54,35 @@ class PFPAnalyzer(BaseAnalyzer):
         
         average_pfp = total_pfp_score / len(packages)
         final_score = round(average_pfp * 10, 2)
+        
+        feedback = self._generate_feedback(package_results)
 
         return AnalysisResult(
             analyzer_id=self.analyzer_id,
             score=final_score,
             message_count=self._generate_summary(package_results),
             module_count=len(self.context.get_all_python_files()),
-            details={"packages": package_results}
+            details={
+                "packages": package_results,
+                
+            }
+            # details={
+            #     "packages": package_results,
+            #     "feedback": feedback,
+            #     "summary": {
+            #         "total_packages": len(packages),
+            #         "average_pfp": round(average_pfp, 4),
+            #         "packages_needing_attention": len([p for p in package_results.values() if p['pfp_score'] < 0.6])
+            #     }
+            # }
         )
 
     def _analyze_package(self, modules: List[str]) -> Dict[str, Any]:
         """Calculates PFP for a single package."""
-        n_total = len(modules)
+        n_total = len(modules) 
         n_ml = 0
         all_stages: Set[str] = set()
-        
+
 
         for module_path in modules:
             fpc_result = self.context.get_file_metric(module_path, 'fpc')
@@ -97,7 +111,7 @@ class PFPAnalyzer(BaseAnalyzer):
             "ml_modules": n_ml,
             "unique_stages_found": n_etapas,
             "concentration_factor": round(cf, 4),
-            "stages": sorted(all_stages),
+            "stage_types": sorted(list(all_stages)),
             "pfp_score": round(pfp_score, 4),
             "purity_level": self._get_purity_level(pfp_score)
         }
@@ -111,6 +125,8 @@ class PFPAnalyzer(BaseAnalyzer):
         python_files = self.context.get_all_python_files()
 
         for file_path in python_files:
+            if file_path.endswith('__init__.py'):
+                continue  
             
             package_path = os.path.dirname(file_path) or '.'
             packages[package_path].append(file_path)
@@ -135,9 +151,74 @@ class PFPAnalyzer(BaseAnalyzer):
         return "Very Low"
         
     def _generate_summary(self, results: Dict) -> Dict:
-        """Creates a summary message count from analysis results."""
         summary = {"High": 0, "Moderate": 0, "Low": 0, "Very Low": 0}
         for data in results.values():
             level = data['purity_level']
             summary[level] += 1
         return summary
+    
+    def _generate_feedback(self, results: Dict) -> List[Dict[str, Any]]:
+        feedback = []
+        
+        for pkg_path, data in results.items():
+            pfp_score = data['pfp_score']
+            purity_level = data['purity_level']
+            
+            if pfp_score < 0.6:
+                issue = {
+                    "package": pkg_path,
+                    "purity_level": purity_level,
+                    "pfp_score": pfp_score,
+                    "total_modules": data['total_modules'],
+                    "ml_modules": data['ml_modules'],
+                    "stages_detected": data['stage_types'],
+                    "recommendations": self._generate_recommendations(data)
+                }
+                feedback.append(issue)
+        
+        return sorted(feedback, key=lambda x: x['pfp_score'])
+    
+    def _generate_recommendations(self, package_data: Dict) -> List[str]:
+        recommendations = []
+        
+        pfp_score = package_data['pfp_score']
+        n_ml = package_data['ml_modules']
+        n_total = package_data['total_modules']
+        n_stages = package_data['unique_stages_found']
+        
+        if n_ml == 0:
+            recommendations.append("This package contains no ML-related modules. Consider moving it or documenting its purpose.")
+        elif n_ml < n_total * 0.5:
+            recommendations.append(f"Only {n_ml}/{n_total} modules are ML-related. Consider separating non-ML code into another package.")
+        
+        if n_stages > 2:
+            recommendations.append(f"Package spans {n_stages} different pipeline stages. Consider splitting into more focused packages.")
+        
+        if n_stages > 1:
+            stages_list = ", ".join(package_data['stage_types'])
+            recommendations.append(f"Mixed stages: {stages_list}. Separate by single responsibility.")
+        
+        if pfp_score < 0.4:
+            improvement_needed = ((0.6 - pfp_score) / 0.6 * 100)
+            recommendations.append(
+                f" HIGH PRIORITY: PFP score of {pfp_score:.2f} indicates poor cohesion. "
+                f"IMPACT: Requires {improvement_needed:.0f}% improvement to reach acceptable levels. "
+                f"ACTION: Immediate refactoring required - start by separating stages into dedicated packages."
+            )
+        elif pfp_score < 0.6:
+            improvement_needed = ((0.6 - pfp_score) / 0.6 * 100)
+            recommendations.append(
+                f" MEDIUM PRIORITY: PFP score of {pfp_score:.2f} is below recommended threshold (0.6). "
+                f"IMPACT: {improvement_needed:.0f}% improvement needed for good cohesion. "
+                f"ACTION: Review module distribution and consider consolidating ML logic or removing non-ML modules."
+            )
+        
+        if n_stages > 0 and n_ml > 0:
+            avg_modules_per_stage = n_ml / n_stages
+            if avg_modules_per_stage < 2 and n_stages > 1:
+                recommendations.append(
+                    f" INSIGHT: Average of {avg_modules_per_stage:.1f} ML module(s) per stage suggests thin distribution. "
+                    f"SUGGESTION: Either combine related stages or ensure each stage has sufficient implementation depth."
+                )
+        
+        return recommendations
