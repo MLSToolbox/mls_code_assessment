@@ -25,18 +25,20 @@ class AnalysisContext:
     This prevents redundant parsing and computation across analyzers.
     """
     
-    def __init__(self, session_id: str, local_path: str):
+    def __init__(self, session_id: str, local_path: str, pipeline_metadata: Optional[Dict[str, Any]] = None):
         """
         Initialize AnalysisContext.
         
         Args:
             session_id: Unique session identifier
             local_path: Path to extracted code
+            pipeline_metadata: Optional pipeline detection results from PipelineAnalyzer
         """
         self.session_id = session_id
         self.local_path = local_path
         self._file_cache: Dict[str, FileAnalysisCache] = {}
         self._global_metrics: Dict[str, Any] = {}
+        self._pipeline_metadata: Optional[Dict[str, Any]] = pipeline_metadata
     
     def get_file_ast(self, file_path: str) -> Optional[ast.Module]:
         """
@@ -185,3 +187,66 @@ class AnalysisContext:
         """Clear all cached data."""
         self._file_cache.clear()
         self._global_metrics.clear()
+    
+    def get_pipeline_metadata(self) -> Optional[Dict[str, Any]]:
+        """
+        Get pipeline detection metadata.
+        
+        Returns:
+            Pipeline metadata from PipelineAnalyzer or None if not available
+        """
+        return self._pipeline_metadata
+    
+    def get_ml_files_by_stage(self, stage: Optional[str] = None) -> Dict[str, List[str]]:
+        """
+        Get ML-related files grouped by pipeline stage.
+        
+        Args:
+            stage: Optional stage name to filter by. If None, returns all stages.
+            
+        Returns:
+            Dictionary mapping stage names to list of file paths.
+            If stage is specified, returns dict with single key.
+            Returns empty dict if no pipeline metadata is available.
+        """
+        if not self._pipeline_metadata:
+            return {}
+        
+        detected_stages = self._pipeline_metadata.get("detected_stages", {})
+        
+        if stage:
+            if stage in detected_stages:
+                files = [
+                    file_info["file"] 
+                    for file_info in detected_stages[stage]
+                ]
+                return {stage: files}
+            return {}
+        
+        result = {}
+        for stage_name, file_list in detected_stages.items():
+            result[stage_name] = [
+                file_info["file"] 
+                for file_info in file_list
+            ]
+        return result
+    
+    def get_all_ml_files(self) -> List[str]:
+        """
+        Get all files detected as part of the ML pipeline.
+        
+        Returns:
+            List of file paths that are part of the ML pipeline.
+            Returns empty list if no pipeline metadata is available.
+        """
+        if not self._pipeline_metadata:
+            return []
+        
+        ml_files = set()
+        detected_stages = self._pipeline_metadata.get("detected_stages", {})
+        
+        for file_list in detected_stages.values():
+            for file_info in file_list:
+                ml_files.add(file_info["file"])
+        
+        return list(ml_files)

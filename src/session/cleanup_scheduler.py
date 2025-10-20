@@ -61,7 +61,6 @@ class CleanupScheduler:
             except Exception as e:
                 logger.error(f"Cleanup failed: {str(e)}", exc_info=True)
             
-            # Sleep in small intervals to allow quick shutdown
             sleep_time = self.interval_minutes * 60
             elapsed = 0
             while elapsed < sleep_time and self.running:
@@ -82,11 +81,9 @@ class CleanupScheduler:
                 if not os.path.isdir(session_dir):
                     continue
                 
-                # Check if session is expired
                 metadata = SessionStorage.load_metadata(session_id, self.base_path)
                 
                 if metadata is None:
-                    # Session expired or invalid, remove it
                     try:
                         shutil.rmtree(session_dir)
                         removed_count += 1
@@ -114,7 +111,6 @@ class CleanupScheduler:
         self._cleanup_expired_sessions()
 
 
-# Global scheduler instance
 _scheduler: Optional[CleanupScheduler] = None
 
 

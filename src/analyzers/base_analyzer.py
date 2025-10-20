@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Dict, Any
 from core.models.analysis_result import AnalysisResult
 from core.analysis_context import AnalysisContext
 from core.exceptions import AnalyzerError
+from core.metrics import get_metric_metadata
 import os
 
 
@@ -90,7 +91,6 @@ class BaseAnalyzer(ABC):
         for item in os.listdir(target_path):
             item_path = os.path.join(target_path, item)
             if os.path.isdir(item_path):
-                # Check if folder contains Python files
                 has_python = any(
                     f.endswith('.py') 
                     for f in os.listdir(item_path) 
@@ -99,25 +99,29 @@ class BaseAnalyzer(ABC):
                 if has_python:
                     folders.append(item)
         
-        return folders or ['.']  # Current directory if no folders found
+        return folders or ['.']
     
     @property
     @abstractmethod
     def analyzer_id(self) -> str:
-        """
-        Unique identifier for this analyzer.
-        
-        Returns:
-            Analyzer identifier string
-        """
         pass
+    
+    def _create_result(
+        self,
+        score: float,
+        message_count: Dict[str, Any],
+        module_count: int,
+        details: Optional[Dict[str, Any]] = None
+    ) -> AnalysisResult:
+        return AnalysisResult(
+            analyzer_id=self.analyzer_id,
+            score=score,
+            message_count=message_count,
+            module_count=module_count,
+            metric_metadata=get_metric_metadata(self.analyzer_id),
+            details=details
+        )
     
     @abstractmethod
     def analyze(self) -> AnalysisResult:
-        """
-        Run the analysis.
-        
-        Returns:
-            AnalysisResult with metrics and messages
-        """
         pass
