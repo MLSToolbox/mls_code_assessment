@@ -72,6 +72,7 @@ def create_routes(app: Flask) -> Flask:
         Expects JSON body:
         {
           "analyzers": ["pylint", "radon_cc", "pipeline"],
+          "all_files": false,  // Optional: analyze all files vs ML-only (default: false)
           "pipeline_overrides": {
             "file_stages": {"path/to/file.py": ["data_collection"]},
             "excluded_files": ["tests/", "docs/"]
@@ -92,6 +93,9 @@ def create_routes(app: Flask) -> Flask:
             
             analysis_request = AnalysisRequest.from_dict(data)
             
+            # Extract all_files parameter (default: False for backward compatibility)
+            all_files = data.get('all_files', False)
+            
             session = SessionManager.load_session(
                 session_id, 
                 base_path=config.settings.SESSION_BASE_PATH
@@ -104,7 +108,8 @@ def create_routes(app: Flask) -> Flask:
             shared_context = AnalysisContext(
                 session_id, 
                 session.local_path,
-                pipeline_metadata=pipeline_metadata
+                pipeline_metadata=pipeline_metadata,
+                all_files=all_files  # Pass all_files to context
             )
             
             results = {}
