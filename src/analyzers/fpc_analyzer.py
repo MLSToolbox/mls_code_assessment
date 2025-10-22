@@ -99,13 +99,15 @@ class FPCAnalyzer(BaseAnalyzer):
         Analyze a single file for FPC (Functional Pipeline Cohesion).
         
         Evaluates how well functions within a file adhere to a single
-        ML pipeline stage or phase.
+        ML pipeline stage or phase. Also handles script-style files with loose code.
         """
         functions = self._extract_functions(tree)
         
         file_stages_from_pipeline = self._get_file_stages_from_pipeline(file_path)
         
         function_stages = {}
+        is_script_file = '<module_script>' in functions
+        
         for func_name, func_node in functions.items():
             if file_stages_from_pipeline:
                 stages = file_stages_from_pipeline
@@ -132,13 +134,18 @@ class FPCAnalyzer(BaseAnalyzer):
             'phases_detected': list(all_phases),
             'cohesion_level': cohesion_level,
             'function_stages': function_stages,
-            'source': 'pipeline_metadata' if file_stages_from_pipeline else 'heuristic'
+            'source': 'pipeline_metadata' if file_stages_from_pipeline else 'heuristic',
         }
         
         return result
     
     def _extract_functions(self, tree: ast.Module) -> Dict[str, ast.FunctionDef]:
-        """Extract all functions and methods from AST."""
+        """
+        Extract all functions and methods from AST.
+        
+        If file has no functions/classes (script-style), creates a pseudo-function
+        representing the loose code for cohesion analysis.
+        """
         
         class FunctionVisitor(ast.NodeVisitor):
             def __init__(self):
@@ -161,6 +168,12 @@ class FPCAnalyzer(BaseAnalyzer):
         
         visitor = FunctionVisitor()
         visitor.visit(tree)
+        
+        # If no structured code found, analyze the entire module as loose code
+        if not visitor.functions:
+            # Create a pseudo-node representing the module-level loose code
+            visitor.functions['<module_script>'] = tree
+        
         return visitor.functions
     
     def _get_file_stages_from_pipeline(self, file_path: str) -> Set[str]:
@@ -298,6 +311,16 @@ class FPCAnalyzer(BaseAnalyzer):
         mode = summary['scan_mode']
         messages.append(f"Analyzed {summary['total_files']} files ({scan_mode_text.get(mode, mode)})")
         
+        # Count script-style files
+        script_files_count = sum(
+            1 for file_data in results['files'].values()
+            if file_data.get('is_script_file', False)
+        )
+        if script_files_count > 0:
+            messages.append(
+                f"ℹ {script_files_count} script-style files detected (loose code without functions)"
+            )
+        
         # Cohesion summary
         if summary['high_cohesion'] > 0:
             messages.append(
@@ -320,11 +343,12 @@ class FPCAnalyzer(BaseAnalyzer):
             ]
             if low_cohesion_files:
                 messages.append("Files needing cohesion refactoring:")
-                for fp in low_cohesion_files:  # Mostrar TODOS los archivos
+                for fp in low_cohesion_files:
                     file_data = results['files'][fp]
                     stages = ', '.join(file_data.get('stages_detected', []))
                     phases = ', '.join(file_data.get('phases_detected', []))
-                    messages.append(f"  - {fp}")
+                    script_marker = " [SCRIPT-STYLE]" if file_data.get('is_script_file') else ""
+                    messages.append(f"  - {fp}{script_marker}")
                     messages.append(f"    Stages: {stages}")
                     messages.append(f"    Phases: {phases}")
         
