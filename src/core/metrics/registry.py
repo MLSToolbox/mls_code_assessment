@@ -21,8 +21,7 @@ METRICS_REGISTRY = {
             "https://radon.readthedocs.io/en/latest/intro.html",
             "https://en.wikipedia.org/wiki/Cyclomatic_complexity"
         ],
-        category="complexity",
-        unit="score"
+        category="complexity"
     ),
     
     "radon_mi": MetricMetadata(
@@ -40,8 +39,7 @@ METRICS_REGISTRY = {
             "0-9": "Difficult to maintain"
         },
         references=["https://radon.readthedocs.io/en/latest/intro.html"],
-        category="maintainability",
-        unit="index"
+        category="maintainability"
     ),
     
     "pylint_score": MetricMetadata(
@@ -66,8 +64,7 @@ METRICS_REGISTRY = {
             "https://pylint.pycqa.org/en/latest/",
             "https://peps.python.org/pep-0008/"
         ],
-        category="quality",
-        unit="score"
+        category="quality"
     ),
     
     "fpc": MetricMetadata(
@@ -77,23 +74,24 @@ METRICS_REGISTRY = {
             "Measures cohesion of ML pipeline code by analyzing how well functions and classes "
             "are organized around specific ML pipeline stages. Higher cohesion indicates better "
             "organized and more maintainable ML code. Focuses purely on functional cohesion "
-            "without considering architectural patterns."
+            "without considering architectural patterns. Also detects and analyzes script-style "
+            "files (loose code without functions) for pipeline stage alignment."
         ),
         formula=(
             "FPC = Weighted average of cohesion levels. "
             "High cohesion (10 pts): single stage. "
             "Medium cohesion (6 pts): single phase, multiple stages. "
-            "Low cohesion (3 pts): multiple phases."
+            "Low cohesion (3 pts): multiple phases. "
+            "Script-style files are analyzed as a single unit for stage detection."
         ),
         ideal_range={"min": 0, "max": 10, "optimal": ">7.0", "acceptable": "5.0-7.0", "warning": "<5.0"},
         interpretation={
             "high (7.0-10.0)": "Well-organized ML pipeline code with clear separation of concerns",
             "medium (4.0-6.9)": "Code organization is acceptable but could benefit from better structure",
-            "low (0-3.9)": "Poorly organized code, consider restructuring around ML pipeline stages"
+            "low (0-3.9)": "Poorly organized code, consider restructuring around ML pipeline stages. Script-style files should be refactored into functions."
         },
         references=["https://github.com/MLS-Toobox/mls_code_generator"],
-        category="cohesion",
-        unit="score"
+        category="cohesion"
     ),
     
     "file_structure": MetricMetadata(
@@ -101,29 +99,31 @@ METRICS_REGISTRY = {
         name="File Structure Quality",
         description=(
             "Evaluates Python file organization patterns. Identifies whether files follow "
-            "OOP principles (classes only), functional style (functions only), or anti-patterns "
-            "(mixed classes and functions in same file). Promotes architectural consistency "
-            "and separation of concerns."
+            "OOP principles (classes only), functional style (functions only), script style "
+            "(loose code), or anti-patterns (mixed classes/functions or mixed structured/loose code). "
+            "Promotes architectural consistency and separation of concerns."
         ),
         formula=(
-            "Score = (classes_only * 1.0 + functions_only * 0.9 + mixed * 0.7) / total_files * 10. "
+            "Score = (classes_only * 1.0 + functions_only * 0.9 + script_only * 0.6 + "
+            "mixed * 0.5 + mixed_script * 0.3) / total_files * 10. "
             "Classes-only pattern receives highest weight (1.0), functional style is acceptable (0.9), "
-            "and mixed pattern is penalized as anti-pattern (0.7)."
+            "script-style is poor (0.6), mixed classes+functions is anti-pattern (0.5), "
+            "and mixed structured+loose code is critical anti-pattern (0.3)."
         ),
-        ideal_range={"min": 0, "max": 10, "optimal": ">8.0", "acceptable": "7.0-8.0", "warning": "<7.0"},
+        ideal_range={"min": 0, "max": 10, "optimal": ">8.0", "acceptable": "6.0-8.0", "warning": "<6.0"},
         interpretation={
             "9.0-10.0": "Excellent - consistent OOP or functional patterns throughout",
-            "7.0-8.9": "Good - mostly consistent with few mixed pattern files",
-            "5.0-6.9": "Acceptable - several mixed pattern files detected",
-            "3.0-4.9": "Poor - many anti-patterns, architectural inconsistency",
-            "<3.0": "Critical - severe architectural issues, immediate refactoring needed"
+            "7.0-8.9": "Good - mostly consistent with few script-style files",
+            "6.0-6.9": "Acceptable - some script-style or mixed pattern files",
+            "4.0-5.9": "Poor - many anti-patterns, architectural inconsistency",
+            "3.0-3.9": "Critical - severe anti-patterns with mixed script code",
+            "<3.0": "Critical - predominant use of mixed script anti-pattern, immediate refactoring needed"
         },
         references=[
             "https://peps.python.org/pep-0008/",
             "https://en.wikipedia.org/wiki/Separation_of_concerns"
         ],
-        category="structure",
-        unit="score"
+        category="structure"
     ),
     
     "pipeline_detection": MetricMetadata(
@@ -141,8 +141,7 @@ METRICS_REGISTRY = {
             "minimal": "Few or no ML pipeline patterns detected"
         },
         references=["https://github.com/MLS-Toobox/mls_code_generator"],
-        category="detection",
-        unit="detection"
+        category="detection"
     ),
     
     "pfp": MetricMetadata(

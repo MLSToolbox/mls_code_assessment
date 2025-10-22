@@ -12,7 +12,6 @@ class MetricMetadata:
     interpretation: Dict[str, str] = field(default_factory=dict)
     references: List[str] = field(default_factory=list)
     category: str = "general"
-    unit: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -23,6 +22,5 @@ class MetricMetadata:
             "ideal_range": self.ideal_range,
             "interpretation": self.interpretation,
             "references": self.references,
-            "category": self.category,
-            "unit": self.unit
+            "category": self.category
         }
