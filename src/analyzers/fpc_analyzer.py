@@ -38,10 +38,10 @@ class FPCAnalyzer(BaseAnalyzer):
     
     def analyze(self) -> AnalysisResult:
         """
-        Run FPC analysis on ML pipeline files.
+        Run FPC analysis on all Python files.
         
-        If pipeline metadata is available, analyzes only files detected as part
-        of the ML pipeline. Otherwise falls back to analyzing all Python files.
+        Uses pipeline metadata when available for more accurate stage detection,
+        but falls back to heuristic detection for files not in the pipeline.
         """
         results = {
             'files': {},
@@ -59,14 +59,15 @@ class FPCAnalyzer(BaseAnalyzer):
             }
         }
         
+        python_files = self.context.get_all_python_files()
         ml_files = self.context.get_all_ml_files()
         
         if ml_files:
-            python_files = ml_files
-            results['summary']['ml_files_only'] = True
-        else:
-            python_files = self.context.get_all_python_files()
             results['summary']['ml_files_only'] = False
+            results['summary']['uses_pipeline_metadata'] = True
+        else:
+            results['summary']['ml_files_only'] = False
+            results['summary']['uses_pipeline_metadata'] = False
         
         results['summary']['total_files'] = len(python_files)
         
@@ -129,7 +130,7 @@ class FPCAnalyzer(BaseAnalyzer):
             else:
                 stages = self._detect_stages(func_node, file_path)
             
-            function_stages[func_name] = stages
+            function_stages[func_name] = list(stages)
         
         all_stages = set()
         for stages in function_stages.values():
@@ -350,13 +351,13 @@ class FPCAnalyzer(BaseAnalyzer):
         messages = []
         summary = results['summary']
         
-        if summary.get('ml_files_only', False):
+        if summary.get('uses_pipeline_metadata', False):
             messages.append(
-                f"✓ Analyzed {summary['total_files']} ML pipeline files (using pipeline detection)"
+                f"✓ Analyzed {summary['total_files']} Python files (enhanced with pipeline metadata)"
             )
         else:
             messages.append(
-                f"Analyzed {summary['total_files']} Python files (no pipeline metadata available)"
+                f"Analyzed {summary['total_files']} Python files (using heuristic detection)"
             )
         
         by_pattern = summary.get('by_pattern', {})

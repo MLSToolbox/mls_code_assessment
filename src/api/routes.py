@@ -108,11 +108,13 @@ def create_routes(app: Flask) -> Flask:
             )
             
             results = {}
+        
             
             if "pipeline" in analysis_request.analyzers:
                 pipeline_analyzer = AnalyzerFactory.create_analyzer(
                     "pipeline", session_id, session.local_path, shared_context
                 )
+                
                 
                 if analysis_request.pipeline_overrides:
                     metadata = session.get_metadata()
@@ -138,6 +140,7 @@ def create_routes(app: Flask) -> Flask:
                 if analyzer_type == "pipeline":
                     continue
                 
+                
                 analyzer = AnalyzerFactory.create_analyzer(
                     analyzer_type, session_id, session.local_path, shared_context
                 )
@@ -155,6 +158,7 @@ def create_routes(app: Flask) -> Flask:
             return ResponseSerializer.success({
                 "session_id": session_id,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
+                
                 "results": serialized_results
             })
             

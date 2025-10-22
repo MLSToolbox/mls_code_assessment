@@ -5,6 +5,7 @@ from collections import defaultdict
 from core.models.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 from core.exceptions import AnalyzerError
+from core.metrics import get_metric_metadata
 
 class PFPAnalyzer(BaseAnalyzer):
     """
@@ -43,6 +44,7 @@ class PFPAnalyzer(BaseAnalyzer):
                 score=10.0, 
                 message_count={},
                 module_count=0,
+                metric_metadata=get_metric_metadata("pfp"),
                 details={"message": "No Python packages found to analyze."}
             )
 
@@ -56,25 +58,30 @@ class PFPAnalyzer(BaseAnalyzer):
         final_score = round(average_pfp * 10, 2)
         
         feedback = self._generate_feedback(package_results)
+        
+        purity_distribution = self._get_purity_distribution(package_results)
 
         return AnalysisResult(
             analyzer_id=self.analyzer_id,
             score=final_score,
             message_count=self._generate_summary(package_results),
             module_count=len(self.context.get_all_python_files()),
+            metric_metadata=get_metric_metadata("pfp"),
             details={
-                "packages": package_results,
-                
+                "summary": {
+                    "total_packages_analyzed": len(packages),
+                    "average_pfp_score": round(average_pfp, 4),
+                    "overall_quality": self._get_overall_quality(average_pfp),
+                    "packages_by_purity": purity_distribution,
+                    "packages_needing_attention": len([p for p in package_results.values() if p['pfp_score'] < 0.6]),
+                    "packages_with_good_purity": len([p for p in package_results.values() if p['pfp_score'] >= 0.6])
+                },
+                "packages": self._format_package_results(package_results),
+                "recommendations": {
+                    "critical_packages": feedback[:5] if feedback else [],
+                    "total_issues_found": len(feedback)
+                }
             }
-            # details={
-            #     "packages": package_results,
-            #     "feedback": feedback,
-            #     "summary": {
-            #         "total_packages": len(packages),
-            #         "average_pfp": round(average_pfp, 4),
-            #         "packages_needing_attention": len([p for p in package_results.values() if p['pfp_score'] < 0.6])
-            #     }
-            # }
         )
 
     def _analyze_package(self, modules: List[str]) -> Dict[str, Any]:
@@ -87,11 +94,7 @@ class PFPAnalyzer(BaseAnalyzer):
         for module_path in modules:
             fpc_result = self.context.get_file_metric(module_path, 'fpc')
             
-            
-            
-           
             if fpc_result and fpc_result.get('stages_detected'):
-                
                 n_ml += 1
                 all_stages.update(fpc_result['stages_detected'])
 
@@ -110,7 +113,6 @@ class PFPAnalyzer(BaseAnalyzer):
             "total_modules": n_total,
             "ml_modules": n_ml,
             "unique_stages_found": n_etapas,
-            "concentration_factor": round(cf, 4),
             "stage_types": sorted(list(all_stages)),
             "pfp_score": round(pfp_score, 4),
             "purity_level": self._get_purity_level(pfp_score)
@@ -149,6 +151,51 @@ class PFPAnalyzer(BaseAnalyzer):
         if score >= 0.4:
             return "Low"
         return "Very Low"
+    
+    def _get_overall_quality(self, average_pfp: float) -> str:
+        """Determines overall project quality based on average PFP."""
+        if average_pfp > 0.8:
+            return "Excellent"
+        if average_pfp >= 0.6:
+            return "Good"
+        if average_pfp >= 0.4:
+            return "Fair"
+        if average_pfp >= 0.2:
+            return "Poor"
+        return "Critical"
+    
+    def _get_purity_distribution(self, results: Dict) -> Dict[str, int]:
+        """Gets distribution of packages by purity level."""
+        distribution = {"High": 0, "Moderate": 0, "Low": 0, "Very Low": 0}
+        for data in results.values():
+            level = data['purity_level']
+            distribution[level] += 1
+        return distribution
+    
+    def _format_package_results(self, results: Dict) -> Dict:
+        """Formats package results with better structure."""
+        formatted = {}
+        for pkg_path, data in results.items():
+            formatted[pkg_path] = {
+                "metrics": {
+                    "total_modules": data['total_modules'],
+                    "ml_modules": data['ml_modules'],
+                    "ml_ratio": round(data['ml_modules'] / data['total_modules'], 2) if data['total_modules'] > 0 else 0,
+                    "pfp_score": data['pfp_score'],
+                    "purity_level": data['purity_level']
+                },
+                "pipeline_stages": {
+                    "detected_stages": data['stage_types'],
+                    "stage_count": data['unique_stages_found'],
+                    "is_focused": data['unique_stages_found'] <= 1
+                },
+                "quality_indicators": {
+                    "needs_refactoring": data['pfp_score'] < 0.6,
+                    "has_ml_content": data['ml_modules'] > 0,
+                    "is_pure_package": data['ml_modules'] == data['total_modules'] and data['unique_stages_found'] == 1
+                }
+            }
+        return formatted
         
     def _generate_summary(self, results: Dict) -> Dict:
         summary = {"High": 0, "Moderate": 0, "Low": 0, "Very Low": 0}

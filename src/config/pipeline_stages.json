@@ -1,10 +1,7 @@
 {
   "phases": {
     "data_engineering": ["data_collection", "data_cleaning", "feature_engineering"],
-    "model_development": [
-      "model_training",
-      "model_evaluation"
-    ]
+    "model_development": ["model_training","model_evaluation"]
   },
   "stages": {
     "data_collection": {
@@ -19,7 +16,6 @@
         "pd.read_parquet",
         "load_dataset",
         "load_iris",
-        
         "fetch_data",
         "requests.get",
         "BeautifulSoup",
@@ -40,6 +36,7 @@
         "isna",
         "notnull",
         "drop_duplicates",
+        ".apply(",
         "impute",
         ".map(",
         ".join(",
@@ -59,6 +56,16 @@
       ],
       "keywords": [
         "fit_transform",
+        "MaxAbsScaler",
+        "ColumnSelect",
+        "ColumnDrop",
+        "DuplicateColumn",
+        "ColumnConcat",
+        "FeatureJoin",
+        "SplitDataframe",
+        "ReuseEncoder",
+        "ReuseScaler",
+        "ScalerTrainer",
         ".transform(",
         ".drop(",
         "pd.concat",
@@ -83,8 +90,10 @@
         "sklearn.feature_extraction",
         "sklearn.decomposition",
         "sklearn.feature_selection",
+        "IScaler",
+        "IEncoder",
         "category_encoders",
-        "feature_engine"
+        "feature_engineering"
       ]
     },
     "model_training": {

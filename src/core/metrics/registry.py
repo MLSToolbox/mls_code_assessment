@@ -119,6 +119,41 @@ METRICS_REGISTRY: Dict[str, MetricMetadata] = {
         category="detection",
         unit="detection"
     ),
+    
+    "pfp": MetricMetadata(
+        metric_id="pfp",
+        name="Package Functional Purity",
+        description=(
+            "Measures how focused a package is on a specific ML pipeline function. Evaluates "
+            "the concentration of ML-related modules within a package and penalizes packages "
+            "that span multiple pipeline stages. Higher PFP indicates better package cohesion "
+            "and adherence to single responsibility principle."
+        ),
+        formula=(
+            "PFP = (n_ml / n_total) × CF, where CF = 1 - ((n_stages - 1) / (MAX_STAGES - 1)). "
+            "n_ml = ML modules in package, n_total = total modules, n_stages = unique stages detected, "
+            "CF = concentration factor that penalizes stage dispersion."
+        ),
+        ideal_range={
+            "min": 0.0,
+            "max": 1.0,
+            "optimal": ">0.8",
+            "acceptable": "0.6-0.8",
+            "warning": "<0.6"
+        },
+        interpretation={
+            "High (0.8-1.0)": "Excellent package purity - focused on single pipeline function with high ML content",
+            "Moderate (0.6-0.79)": "Acceptable purity - package is reasonably focused but has room for improvement",
+            "Low (0.4-0.59)": "Poor purity - package handles multiple stages or has low ML content, refactoring recommended",
+            "Very Low (0.0-0.39)": "Critical purity issues - package lacks clear purpose, immediate refactoring needed"
+        },
+        references=[
+            "https://github.com/MLS-Toobox/mls_code_generator",
+            "Single Responsibility Principle - Clean Code by Robert C. Martin"
+        ],
+        category="cohesion",
+        unit="score"
+    ),
 }
 
 
