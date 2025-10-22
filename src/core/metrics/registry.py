@@ -1,23 +1,21 @@
-from typing import Dict
-from .metadata import MetricMetadata
+from core.metrics.metadata import MetricMetadata
 
 
-METRICS_REGISTRY: Dict[str, MetricMetadata] = {
+METRICS_REGISTRY = {
     "radon_cc": MetricMetadata(
         metric_id="radon_cc",
         name="Cyclomatic Complexity",
         description=(
-            "Measures the cyclomatic complexity of code, representing the number of "
-            "independent paths through the code. Higher complexity indicates more "
-            "difficult code to test and maintain."
+            "Measures code complexity by counting independent paths through code. "
+            "Higher values indicate more complex, harder to test code."
         ),
-        formula="CC = E - N + 2P (where E=edges, N=nodes, P=connected components)",
+        formula="CC = E - N + 2P (E=edges, N=nodes, P=connected components)",
         ideal_range={"min": 1, "max": 10, "optimal": "1-5", "acceptable": "6-10", "warning": ">10"},
         interpretation={
-            "1-5": "Simple code, easy to understand and maintain",
-            "6-10": "Moderate complexity, acceptable but monitor",
-            "11-20": "High complexity, consider refactoring",
-            ">20": "Very high complexity, refactoring recommended"
+            "1-5": "Simple, easy to test",
+            "6-10": "More complex, acceptable",
+            "11-20": "Complex, consider refactoring",
+            ">20": "Very complex, refactoring needed"
         },
         references=[
             "https://radon.readthedocs.io/en/latest/intro.html",
@@ -31,33 +29,27 @@ METRICS_REGISTRY: Dict[str, MetricMetadata] = {
         metric_id="radon_mi",
         name="Maintainability Index",
         description=(
-            "Composite metric calculating maintainability based on Halstead Volume, "
-            "Cyclomatic Complexity, and Lines of Code. Higher values indicate better maintainability."
+            "Composite metric measuring code maintainability based on complexity, "
+            "volume, and comments. Higher values indicate more maintainable code."
         ),
-        formula=(
-            "MI = 171 - 5.2 * ln(Halstead Volume) - 0.23 * (Cyclomatic Complexity) - "
-            "16.2 * ln(Lines of Code)"
-        ),
-        ideal_range={"min": 0, "max": 100, "optimal": ">20", "warning": "<10"},
+        formula="MI = 171 - 5.2*ln(V) - 0.23*G - 16.2*ln(L) (V=volume, G=complexity, L=lines)",
+        ideal_range={"min": 0, "max": 100, "optimal": ">20", "acceptable": "10-20", "warning": "<10"},
         interpretation={
-            "A (20-100)": "High maintainability - easy to maintain",
-            "B (10-19)": "Medium maintainability - acceptable but can improve",
-            "C (0-9)": "Low maintainability - refactoring strongly recommended"
+            "20-100": "Maintainable",
+            "10-19": "Moderate maintainability",
+            "0-9": "Difficult to maintain"
         },
-        references=[
-            "https://radon.readthedocs.io/en/latest/intro.html",
-            "https://www.verifysoft.com/en_maintainability.html"
-        ],
+        references=["https://radon.readthedocs.io/en/latest/intro.html"],
         category="maintainability",
         unit="index"
     ),
     
     "pylint_score": MetricMetadata(
         metric_id="pylint_score",
-        name="PyLint Code Quality Score",
+        name="Code Quality Score",
         description=(
-            "Overall code quality score based on static analysis. Evaluates code against "
-            "PEP 8 style guide, detects errors, enforces coding standards, and finds code smells."
+            "Evaluates code against PEP 8 style guide, detects errors, enforces coding standards, "
+            "and finds code smells."
         ),
         formula=(
             "Score = 10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10)"
@@ -84,11 +76,14 @@ METRICS_REGISTRY: Dict[str, MetricMetadata] = {
         description=(
             "Measures cohesion of ML pipeline code by analyzing how well functions and classes "
             "are organized around specific ML pipeline stages. Higher cohesion indicates better "
-            "organized and more maintainable ML code."
+            "organized and more maintainable ML code. Focuses purely on functional cohesion "
+            "without considering architectural patterns."
         ),
         formula=(
-            "FPC = (Number of cohesive modules / Total modules) * 10. "
-            "A module is cohesive when its functions/methods belong to the same pipeline stage or phase."
+            "FPC = Weighted average of cohesion levels. "
+            "High cohesion (10 pts): single stage. "
+            "Medium cohesion (6 pts): single phase, multiple stages. "
+            "Low cohesion (3 pts): multiple phases."
         ),
         ideal_range={"min": 0, "max": 10, "optimal": ">7.0", "acceptable": "5.0-7.0", "warning": "<5.0"},
         interpretation={
@@ -98,6 +93,36 @@ METRICS_REGISTRY: Dict[str, MetricMetadata] = {
         },
         references=["https://github.com/MLS-Toobox/mls_code_generator"],
         category="cohesion",
+        unit="score"
+    ),
+    
+    "file_structure": MetricMetadata(
+        metric_id="file_structure",
+        name="File Structure Quality",
+        description=(
+            "Evaluates Python file organization patterns. Identifies whether files follow "
+            "OOP principles (classes only), functional style (functions only), or anti-patterns "
+            "(mixed classes and functions in same file). Promotes architectural consistency "
+            "and separation of concerns."
+        ),
+        formula=(
+            "Score = (classes_only * 1.0 + functions_only * 0.9 + mixed * 0.7) / total_files * 10. "
+            "Classes-only pattern receives highest weight (1.0), functional style is acceptable (0.9), "
+            "and mixed pattern is penalized as anti-pattern (0.7)."
+        ),
+        ideal_range={"min": 0, "max": 10, "optimal": ">8.0", "acceptable": "7.0-8.0", "warning": "<7.0"},
+        interpretation={
+            "9.0-10.0": "Excellent - consistent OOP or functional patterns throughout",
+            "7.0-8.9": "Good - mostly consistent with few mixed pattern files",
+            "5.0-6.9": "Acceptable - several mixed pattern files detected",
+            "3.0-4.9": "Poor - many anti-patterns, architectural inconsistency",
+            "<3.0": "Critical - severe architectural issues, immediate refactoring needed"
+        },
+        references=[
+            "https://peps.python.org/pep-0008/",
+            "https://en.wikipedia.org/wiki/Separation_of_concerns"
+        ],
+        category="structure",
         unit="score"
     ),
     
@@ -158,6 +183,18 @@ METRICS_REGISTRY: Dict[str, MetricMetadata] = {
 
 
 def get_metric_metadata(metric_id: str) -> MetricMetadata:
+    """
+    Retrieve metadata for a specific metric.
+    
+    Args:
+        metric_id: Unique identifier for the metric
+        
+    Returns:
+        MetricMetadata object
+        
+    Raises:
+        KeyError: If metric_id not found in registry
+    """
     if metric_id not in METRICS_REGISTRY:
         raise KeyError(
             f"Metric '{metric_id}' not found. Available: {list(METRICS_REGISTRY.keys())}"
