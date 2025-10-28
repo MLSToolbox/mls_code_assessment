@@ -253,7 +253,7 @@ class FPCAnalyzer(BaseAnalyzer):
             'low': Multiple phases (worst cohesion)
         """
         if unique_stages == 0:
-            return 'high'
+            return 'non_ml_file'
         elif unique_stages == 1:
             return 'high'
         elif unique_phases == 1:
