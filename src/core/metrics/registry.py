@@ -175,9 +175,9 @@ METRICS_REGISTRY = {
             "https://github.com/MLS-Toobox/mls_code_generator",
             "Single Responsibility Principle - Clean Code by Robert C. Martin"
         ],
-        category="cohesion",
-        unit="score"
-    ),
+        category="cohesion"
+        
+    )
 }
 
 

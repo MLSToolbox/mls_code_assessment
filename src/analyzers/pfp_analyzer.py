@@ -57,8 +57,6 @@ class PFPAnalyzer(BaseAnalyzer):
         average_pfp = total_pfp_score / len(packages)
         final_score = round(average_pfp * 10, 2)
         
-        feedback = self._generate_feedback(package_results)
-        
         purity_distribution = self._get_purity_distribution(package_results)
 
         return AnalysisResult(
@@ -76,11 +74,7 @@ class PFPAnalyzer(BaseAnalyzer):
                     "packages_needing_attention": len([p for p in package_results.values() if p['pfp_score'] < 0.6]),
                     "packages_with_good_purity": len([p for p in package_results.values() if p['pfp_score'] >= 0.6])
                 },
-                "packages": self._format_package_results(package_results),
-                "recommendations": {
-                    "critical_packages": feedback[:5] if feedback else [],
-                    "total_issues_found": len(feedback)
-                }
+                "packages": self._format_package_results(package_results)
             }
         )
 
@@ -89,6 +83,7 @@ class PFPAnalyzer(BaseAnalyzer):
         n_total = len(modules) 
         n_ml = 0
         all_stages: Set[str] = set()
+        modules_info: List[Dict[str, Any]] = []
 
 
         for module_path in modules:
@@ -97,6 +92,17 @@ class PFPAnalyzer(BaseAnalyzer):
             if fpc_result and fpc_result.get('stages_detected'):
                 n_ml += 1
                 all_stages.update(fpc_result['stages_detected'])
+                modules_info.append({
+                    'path': module_path,
+                    'stages': list(fpc_result.get('stages_detected', [])),
+                    'cohesion': fpc_result.get('cohesion_level')
+                })
+            else:
+                modules_info.append({
+                    'path': module_path,
+                    'stages': [],
+                    'cohesion': None
+                })
 
        
         n_etapas = len(all_stages)
@@ -115,7 +121,8 @@ class PFPAnalyzer(BaseAnalyzer):
             "unique_stages_found": n_etapas,
             "stage_types": sorted(list(all_stages)),
             "pfp_score": round(pfp_score, 4),
-            "purity_level": self._get_purity_level(pfp_score)
+            "purity_level": self._get_purity_level(pfp_score),
+            "modules": modules_info
         }
         
     def _discover_packages(self) -> Dict[str, List[str]]:
@@ -160,8 +167,7 @@ class PFPAnalyzer(BaseAnalyzer):
             return "Good"
         if average_pfp >= 0.4:
             return "Fair"
-        if average_pfp >= 0.2:
-            return "Poor"
+       
         return "Critical"
     
     def _get_purity_distribution(self, results: Dict) -> Dict[str, int]:
@@ -193,7 +199,8 @@ class PFPAnalyzer(BaseAnalyzer):
                     "needs_refactoring": data['pfp_score'] < 0.6,
                     "has_ml_content": data['ml_modules'] > 0,
                     "is_pure_package": data['ml_modules'] == data['total_modules'] and data['unique_stages_found'] == 1
-                }
+                },
+                "recommendations": self._generate_recommendations(pkg_path, data)
             }
         return formatted
         
@@ -204,68 +211,135 @@ class PFPAnalyzer(BaseAnalyzer):
             summary[level] += 1
         return summary
     
-    def _generate_feedback(self, results: Dict) -> List[Dict[str, Any]]:
-        feedback = []
-        
-        for pkg_path, data in results.items():
-            pfp_score = data['pfp_score']
-            purity_level = data['purity_level']
-            
-            if pfp_score < 0.6:
-                issue = {
-                    "package": pkg_path,
-                    "purity_level": purity_level,
-                    "pfp_score": pfp_score,
-                    "total_modules": data['total_modules'],
-                    "ml_modules": data['ml_modules'],
-                    "stages_detected": data['stage_types'],
-                    "recommendations": self._generate_recommendations(data)
-                }
-                feedback.append(issue)
-        
-        return sorted(feedback, key=lambda x: x['pfp_score'])
+    def _get_stage_to_package_mapping(self) -> Dict[str, List[str]]:
+        """Returns suggested package names for each ML pipeline stage."""
+        return {
+            'data_collection': ['data', 'data/collection', 'data/ingest'],
+            'data_cleaning': ['data/preprocessing', 'data/cleaning', 'data/prep'],
+            'feature_engineering': ['features', 'feature_engineering', 'features/processing'],
+            'model_training': ['training', 'training/models', 'training/experiments'],
+            'model_evaluation': ['evaluation', 'evaluation/metrics', 'validation']
+        }
     
-    def _generate_recommendations(self, package_data: Dict) -> List[str]:
-        recommendations = []
-        
+    def _classify_modules_by_stage(self, modules: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+        """Groups module file paths by their detected pipeline stages."""
+        files_by_stage: Dict[str, List[str]] = {}
+        for module in modules:
+            for stage in module.get('stages', []):
+                files_by_stage.setdefault(stage, []).append(module['path'])
+        return files_by_stage
+    
+    def _identify_dominant_stage(self, files_by_stage: Dict[str, List[str]]) -> str:
+        """Returns the stage with the most files, or None if empty."""
+        if not files_by_stage:
+            return None
+        stage_counts = {stage: len(files) for stage, files in files_by_stage.items()}
+        return max(stage_counts, key=stage_counts.get)
+    
+    def _generate_file_move_suggestions(
+        self, 
+        files_by_stage: Dict[str, List[str]], 
+        dominant_stage: str,
+        stage_to_suggested_pkgs: Dict[str, List[str]]
+    ) -> List[str]:
+        """Generates concrete file move suggestions for minority stages."""
+        moves: List[str] = []
+        for stage, files in files_by_stage.items():
+            if stage == dominant_stage:
+                continue
+            suggested_names = stage_to_suggested_pkgs.get(stage, [stage])
+            suggested_pkg = suggested_names[0]
+            example_files = files[:3]
+            for file_path in example_files:
+                fname = os.path.basename(file_path)
+                new_path = os.path.join(suggested_pkg, fname)
+                moves.append(f"Move '{file_path}' → '{new_path}' (belongs to stage '{stage}')")
+        return moves
+    
+    def _detect_deployment_candidates(self, modules: List[Dict[str, Any]]) -> List[str]:
+        """Identifies files likely related to deployment/registry by filename heuristics."""
+        keywords = ('promote', 'deploy', 'registry', 'register', 'push_model', 'serve', 'inference')
+        candidates = []
+        for module in modules:
+            path = module['path']
+            if any(keyword in os.path.basename(path).lower() for keyword in keywords):
+                candidates.append(path)
+        return candidates
+    
+    def _generate_priority_message(
+        self, 
+        pfp_score: float, 
+        package_path: str, 
+        dominant_stage: str
+    ) -> str:
+        """Generates priority guidance message based on PFP score."""
+        if pfp_score < 0.4:
+            return f"HIGH PRIORITY: PFP {pfp_score:.2f} — split the package by responsibility and apply the suggested file moves above to achieve immediate gains."
+        elif pfp_score < 0.6:
+            return f"MEDIUM PRIORITY: PFP {pfp_score:.2f} — consider moving the listed files and consolidating ML logic into '{package_path}/{dominant_stage}' or suggested packages."
+        return None
+    
+    def _generate_recommendations(self, package_path: str, package_data: Dict) -> List[str]:
+        """Orchestrates generation of actionable recommendations for a package."""
+        recommendations: List[str] = []
+
         pfp_score = package_data['pfp_score']
         n_ml = package_data['ml_modules']
         n_total = package_data['total_modules']
         n_stages = package_data['unique_stages_found']
-        
+        modules = package_data.get('modules', [])
+
         if n_ml == 0:
-            recommendations.append("This package contains no ML-related modules. Consider moving it or documenting its purpose.")
-        elif n_ml < n_total * 0.5:
-            recommendations.append(f"Only {n_ml}/{n_total} modules are ML-related. Consider separating non-ML code into another package.")
-        
-        if n_stages > 2:
-            recommendations.append(f"Package spans {n_stages} different pipeline stages. Consider splitting into more focused packages.")
-        
-        if n_stages > 1:
-            stages_list = ", ".join(package_data['stage_types'])
-            recommendations.append(f"Mixed stages: {stages_list}. Separate by single responsibility.")
-        
-        if pfp_score < 0.4:
-            improvement_needed = ((0.6 - pfp_score) / 0.6 * 100)
             recommendations.append(
-                f" HIGH PRIORITY: PFP score of {pfp_score:.2f} indicates poor cohesion. "
-                f"IMPACT: Requires {improvement_needed:.0f}% improvement to reach acceptable levels. "
-                f"ACTION: Immediate refactoring required - start by separating stages into dedicated packages."
+                "This package contains no ML-related modules. Consider moving utility code "
+                "to a dedicated utilities package or documenting its non-ML responsibility."
             )
-        elif pfp_score < 0.6:
-            improvement_needed = ((0.6 - pfp_score) / 0.6 * 100)
+            return recommendations
+
+        if n_ml < max(1, int(n_total * 0.5)):
             recommendations.append(
-                f" MEDIUM PRIORITY: PFP score of {pfp_score:.2f} is below recommended threshold (0.6). "
-                f"IMPACT: {improvement_needed:.0f}% improvement needed for good cohesion. "
-                f"ACTION: Review module distribution and consider consolidating ML logic or removing non-ML modules."
+                f"Only {n_ml}/{n_total} modules are ML-related. Move non-ML modules to a "
+                f"separate package (e.g., '{package_path}/utils' or a top-level 'utils' package) "
+                f"to increase purity."
             )
-        
-        if n_stages > 0 and n_ml > 0:
-            avg_modules_per_stage = n_ml / n_stages
-            if avg_modules_per_stage < 2 and n_stages > 1:
+
+        if n_stages <= 1:
+            if pfp_score < 0.6:
                 recommendations.append(
-                    f" INSIGHT: Average of {avg_modules_per_stage:.1f} ML module(s) per stage suggests thin distribution. "
-                    f"SUGGESTION: Either combine related stages or ensure each stage has sufficient implementation depth."
+                    f"Package '{package_path}' has low PFP ({pfp_score:.2f}) despite being focused; "
+                    f"inspect non-ML modules or thin ML implementations and consolidate ML logic "
+                    f"into fewer modules."
                 )
-        
+            return recommendations
+
+        stage_to_suggested_pkgs = self._get_stage_to_package_mapping()
+        files_by_stage = self._classify_modules_by_stage(modules)
+        dominant_stage = self._identify_dominant_stage(files_by_stage)
+
+        moves = self._generate_file_move_suggestions(
+            files_by_stage, 
+            dominant_stage, 
+            stage_to_suggested_pkgs
+        )
+
+        if moves:
+            recommendations.append(
+                f"Package '{package_path}' spans multiple pipeline stages "
+                f"({', '.join(package_data['stage_types'])}). Suggested file moves to increase purity:"
+            )
+            recommendations.extend(moves[:5])
+
+        deploy_candidates = self._detect_deployment_candidates(modules)
+        if deploy_candidates:
+            for file_path in deploy_candidates[:3]:
+                recommendations.append(
+                    f"Consider moving deployment/registry helper '{file_path}' to a dedicated "
+                    f"package like 'deployment' or 'registry' (e.g., 'src/deployment/{os.path.basename(file_path)}') "
+                    f"to improve separation of concerns."
+                )
+
+        priority_msg = self._generate_priority_message(pfp_score, package_path, dominant_stage)
+        if priority_msg:
+            recommendations.append(priority_msg)
+
         return recommendations

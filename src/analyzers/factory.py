@@ -19,6 +19,7 @@ class AnalyzerFactory:
             from analyzers.radon_mi_analyzer import RadonMIAnalyzer
             from analyzers.pipeline_analyzer import PipelineAnalyzer
             from analyzers.fpc_analyzer import FPCAnalyzer
+            from analyzers.pfp_analyzer import PFPAnalyzer
             from analyzers.file_structure_analyzer import FileStructureAnalyzer
             
             cls._analyzers = {
@@ -27,6 +28,7 @@ class AnalyzerFactory:
                 "radon_mi": RadonMIAnalyzer,
                 "pipeline": PipelineAnalyzer,
                 "fpc": FPCAnalyzer,
+                "pfp": PFPAnalyzer,
                 "file_structure": FileStructureAnalyzer,
             }
         return cls._analyzers

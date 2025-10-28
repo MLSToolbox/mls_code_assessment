@@ -237,9 +237,31 @@ class FPCAnalyzer(BaseAnalyzer):
         """Detect ML pipeline stages in a function."""
         detected_stages = set()
         
+        # Extract filename without path and extension
+        filename_lower = file_path.lower().replace('\\', '/').split('/')[-1].replace('.py', '')
+        
+        # Check for EXACT filename matches only (high confidence)
+        exact_matches = []
+        for stage_name, stage_config in self.config['stages'].items():
+            for pattern in stage_config.get('filename_patterns', []):
+                if filename_lower == pattern.lower():
+                    exact_matches.append(stage_name)
+                    break  # Only need one exact match per stage
+        
+        # If exactly one stage has an exact filename match, return it with high confidence
+        if len(exact_matches) == 1:
+            return {exact_matches[0]}
+        
+        # If multiple exact matches (rare), continue to code analysis for disambiguation
+        # If no exact matches, continue to code analysis
+        # This avoids false positives from partial matches like "train" in "encoder_train"
+        
         source = self.context.get_file_source(file_path)
         if source is None:
             return detected_stages
+        
+        # Get module-level AST for import detection
+        module_tree = self.context.get_file_ast(file_path)
         
         try:
             func_source = ast.get_source_segment(source, func_node)
@@ -250,17 +272,48 @@ class FPCAnalyzer(BaseAnalyzer):
             return detected_stages
         
         func_source_lower = func_source.lower()
+        source_lower = source.lower()  # Full file source for broader keyword detection
         
         for stage_name, stage_config in self.config['stages'].items():
-            # Check keywords
+            # Check keywords in function source first (higher confidence)
             for keyword in stage_config.get('keywords', []):
                 if keyword.lower() in func_source_lower:
                     detected_stages.add(stage_name)
                     break
             
+            # Also check keywords at module level (for class names, etc.)
+            if stage_name not in detected_stages:
+                for keyword in stage_config.get('keywords', []):
+                    if keyword.lower() in source_lower:
+                        detected_stages.add(stage_name)
+                        break
+            
             if stage_name in detected_stages:
                 continue
             
+            # Check imports at MODULE level (not just function level)
+            if module_tree:
+                for node in ast.walk(module_tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            for import_pattern in stage_config.get('imports', []):
+                                if import_pattern.lower() in alias.name.lower():
+                                    detected_stages.add(stage_name)
+                                    break
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.module:
+                            for import_pattern in stage_config.get('imports', []):
+                                if import_pattern.lower() in node.module.lower():
+                                    detected_stages.add(stage_name)
+                                    break
+                    
+                    if stage_name in detected_stages:
+                        break
+            
+            if stage_name in detected_stages:
+                continue
+            
+            # Also check imports at function level (for local imports)
             for node in ast.walk(func_node):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
