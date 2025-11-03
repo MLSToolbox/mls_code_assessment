@@ -1,19 +1,30 @@
 import ast
 import os
 import json
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional
 
 from core.models.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
+from analyzers.ml_content_analyzer import MLContentAnalyzer
+from analyzers.fpc.nloc_calculator import NLOCCalculator
+from config.settings import settings
 
 
 class FPCAnalyzer(BaseAnalyzer):
+    """
+    Functional Pipeline Cohesion Analyzer.
+    
+    Evaluates code organization by analyzing:
+    1. ML pipeline stage/phase cohesion
+    2. ML content presence (via MLContentAnalyzer)
+    3. NLOC (Non-comment Lines of Code) to determine file size
+    """
     
     def __init__(self, session_id: str, local_path: str, context=None):
         super().__init__(session_id, local_path, context)
-                
+        
         pipeline_stages_json_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             'config',
             'pipeline_stages.json'
         )
@@ -30,6 +41,15 @@ class FPCAnalyzer(BaseAnalyzer):
         for phase, stages in self.config.get('phases', {}).items():
             for stage in stages:
                 self.stage_to_phase[stage] = phase
+        
+        self.ml_content_analyzer = MLContentAnalyzer(
+            session_id=session_id,
+            local_path=local_path,
+            context=context
+        )
+        
+        nloc_threshold = settings.ANALYZER_CONFIG.get('fpc', {}).get('nloc_threshold', 30)
+        self.nloc_calculator = NLOCCalculator(threshold=nloc_threshold)
     
     @property
     def analyzer_id(self) -> str:
@@ -44,7 +64,8 @@ class FPCAnalyzer(BaseAnalyzer):
         - If context.all_files=False: Prefers ML pipeline files, falls back to all files
         
         Returns:
-            AnalysisResult with FPC score based ONLY on ML pipeline cohesion.
+            AnalysisResult with FPC score based on ML pipeline cohesion, 
+            ML content, and NLOC analysis.
         """
         results = {
             'files': {},
@@ -53,33 +74,41 @@ class FPCAnalyzer(BaseAnalyzer):
                 'high_cohesion': 0,
                 'medium_cohesion': 0,
                 'low_cohesion': 0,
-                'scan_mode': self.context.get_scan_mode()
+                'non_ml_files': 0,
+                'small_files': 0,
+                'scan_mode': self.context.get_scan_mode(),
+                'nloc_threshold': self.nloc_calculator.get_threshold()
             }
         }
         
-        # Get files from context (respects all_files configuration)
         python_files = self.context.get_python_files()
         results['summary']['total_files'] = len(python_files)
         
         for py_file in python_files:
             tree = self.context.get_file_ast(py_file)
-            if tree is None:
+            source = self.context.get_file_source(py_file)
+            
+            if tree is None or source is None:
                 continue
             
-            file_result = self._analyze_file(tree, py_file)
+            file_result = self._analyze_file(tree, source, py_file)
             results['files'][py_file] = file_result
             
             self.context.set_file_metric(py_file, 'fpc', file_result)
             
-            cohesion_level = file_result['cohesion_level']
-            if cohesion_level == 'high':
-                results['summary']['high_cohesion'] += 1
-            elif cohesion_level == 'medium':
-                results['summary']['medium_cohesion'] += 1
+            if not file_result['ml_content']:
+                results['summary']['non_ml_files'] += 1
+            elif not file_result['above_nloc_threshold']:
+                results['summary']['small_files'] += 1
             else:
-                results['summary']['low_cohesion'] += 1
+                cohesion_level = file_result['cohesion_level']
+                if cohesion_level == 'high':
+                    results['summary']['high_cohesion'] += 1
+                elif cohesion_level == 'medium':
+                    results['summary']['medium_cohesion'] += 1
+                elif cohesion_level == 'low':
+                    results['summary']['low_cohesion'] += 1
         
-        # Calculate score based ONLY on cohesion (no pattern weights)
         if results['summary']['total_files'] > 0:
             score = self._calculate_cohesion_score(results)
         else:
@@ -94,13 +123,20 @@ class FPCAnalyzer(BaseAnalyzer):
             details=results
         )
     
-    def _analyze_file(self, tree: ast.Module, file_path: str) -> Dict:
+    def _analyze_file(self, tree: ast.Module, source: str, file_path: str) -> Dict:
         """
         Analyze a single file for FPC (Functional Pipeline Cohesion).
         
-        Evaluates how well functions within a file adhere to a single
-        ML pipeline stage or phase. Also handles script-style files with loose code.
+        Evaluates:
+        1. Pipeline stage/phase cohesion
+        2. ML content presence
+        3. NLOC (file size)
         """
+        nloc = self.nloc_calculator.calculate_nloc(source)
+        above_nloc_threshold = self.nloc_calculator.is_above_threshold(nloc)
+        
+        ml_content = self.ml_content_analyzer.analyze_file(file_path)
+        
         functions = self._extract_functions(tree)
         
         file_stages_from_pipeline = self._get_file_stages_from_pipeline(file_path)
@@ -125,7 +161,12 @@ class FPCAnalyzer(BaseAnalyzer):
         all_phases.discard('unknown')
         unique_phases = len(all_phases)
         
-        cohesion_level = self._determine_cohesion_level(unique_stages, unique_phases)
+        cohesion_level = self._determine_cohesion_level(
+            unique_stages, 
+            unique_phases,
+            ml_content,
+            above_nloc_threshold
+        )
         
         result = {
             'unique_stages': unique_stages,
@@ -135,6 +176,10 @@ class FPCAnalyzer(BaseAnalyzer):
             'cohesion_level': cohesion_level,
             'function_stages': function_stages,
             'source': 'pipeline_metadata' if file_stages_from_pipeline else 'heuristic',
+            'ml_content': ml_content,
+            'nloc': nloc,
+            'above_nloc_threshold': above_nloc_threshold,
+            'is_script_file': is_script_file
         }
         
         return result
@@ -169,9 +214,7 @@ class FPCAnalyzer(BaseAnalyzer):
         visitor = FunctionVisitor()
         visitor.visit(tree)
         
-        # If no structured code found, analyze the entire module as loose code
         if not visitor.functions:
-            # Create a pseudo-node representing the module-level loose code
             visitor.functions['<module_script>'] = tree
         
         return visitor.functions
@@ -211,7 +254,6 @@ class FPCAnalyzer(BaseAnalyzer):
         func_source_lower = func_source.lower()
         
         for stage_name, stage_config in self.config['stages'].items():
-            # Check keywords
             for keyword in stage_config.get('keywords', []):
                 if keyword.lower() in func_source_lower:
                     detected_stages.add(stage_name)
@@ -239,22 +281,48 @@ class FPCAnalyzer(BaseAnalyzer):
         
         return detected_stages
     
-    def _determine_cohesion_level(self, unique_stages: int, unique_phases: int) -> str:
+    def _determine_cohesion_level(
+        self, 
+        unique_stages: int, 
+        unique_phases: int,
+        ml_content: bool,
+        above_nloc_threshold: bool
+    ) -> str:
         """
-        Determine cohesion level based ONLY on stages and phases.
+        Determine cohesion level based on stages, phases, ML content, and file size.
         
         Args:
             unique_stages: Number of unique ML pipeline stages
             unique_phases: Number of unique ML pipeline phases
+            ml_content: Whether file contains ML content
+            above_nloc_threshold: Whether file is above NLOC threshold
             
         Returns:
             'high': Single stage (best cohesion)
             'medium': Single phase, multiple stages
             'low': Multiple phases (worst cohesion)
+            'non_ml_file': File doesn't contain ML content
+            'too_small': File is below NLOC threshold (not counted as issue)
         """
+        # Non-ML files don't count for cohesion
+        if not ml_content:
+            return 'non_ml_file'
+        
+        # No stages detected
         if unique_stages == 0:
             return 'non_ml_file'
-        elif unique_stages == 1:
+        
+        # Files below threshold are marked but not penalized
+        if not above_nloc_threshold:
+            if unique_stages == 1:
+                return 'high'
+            elif unique_phases == 1:
+                return 'medium'
+            else:
+                return 'too_small'
+        
+        # Regular cohesion evaluation
+        if unique_stages == 1:
             return 'high'
         elif unique_phases == 1:
             return 'medium'
@@ -263,9 +331,11 @@ class FPCAnalyzer(BaseAnalyzer):
     
     def _calculate_cohesion_score(self, results: Dict) -> float:
         """
-        Calculate weighted score based ONLY on ML pipeline cohesion.
+        Calculate weighted score based on ML pipeline cohesion.
         
-        Pattern weights have been REMOVED - this now scores purely on cohesion.
+        Only counts files that:
+        - Have ML content
+        - Are above NLOC threshold
         
         Cohesion scores:
         - high: 10 points (single stage)
@@ -276,7 +346,7 @@ class FPCAnalyzer(BaseAnalyzer):
             results: Analysis results dictionary
             
         Returns:
-            Score from 0-10 based purely on cohesion levels
+            Score from 0-10 based on cohesion levels
         """
         cohesion_scores = {
             'high': 10,
@@ -285,16 +355,19 @@ class FPCAnalyzer(BaseAnalyzer):
         }
         
         total_score = 0
-        total_files = 0
+        counted_files = 0
         
         for file_data in results['files'].values():
             cohesion = file_data.get('cohesion_level', 'high')
-            total_score += cohesion_scores.get(cohesion, 10)
-            total_files += 1
+            
+            # Only count ML files above threshold
+            if cohesion in ['high', 'medium', 'low']:
+                total_score += cohesion_scores.get(cohesion, 10)
+                counted_files += 1
         
-        if total_files > 0:
+        if counted_files > 0:
             # Normalize to 0-10 scale
-            return round((total_score / (total_files * 10)) * 10, 2)
+            return round((total_score / (counted_files * 10)) * 10, 2)
         return 0
     
     def _generate_messages(self, results: Dict) -> List[str]:
@@ -309,46 +382,63 @@ class FPCAnalyzer(BaseAnalyzer):
             'all_files_fallback': 'all Python files (no pipeline detected)'
         }
         mode = summary['scan_mode']
-        messages.append(f"Analyzed {summary['total_files']} files ({scan_mode_text.get(mode, mode)})")
-        
-        # Count script-style files
-        script_files_count = sum(
-            1 for file_data in results['files'].values()
-            if file_data.get('is_script_file', False)
+        messages.append(
+            f"Analyzed {summary['total_files']} files ({scan_mode_text.get(mode, mode)})"
         )
-        if script_files_count > 0:
+        
+        # ML content summary
+        if summary['non_ml_files'] > 0:
             messages.append(
-                f"ℹ {script_files_count} script-style files detected (loose code without functions)"
+                f"ℹ {summary['non_ml_files']} files without ML content (excluded from cohesion evaluation)"
+            )
+        
+        # Small files summary
+        if summary['small_files'] > 0:
+            messages.append(
+                f"ℹ {summary['small_files']} files below NLOC threshold "
+                f"({summary['nloc_threshold']} lines) - marked but not penalized"
             )
         
         # Cohesion summary
+        evaluated_files = (
+            summary['high_cohesion'] + 
+            summary['medium_cohesion'] + 
+            summary['low_cohesion']
+        )
+        
+        if evaluated_files > 0:
+            messages.append(
+                f"Evaluated {evaluated_files} ML files for cohesion:"
+            )
+        
         if summary['high_cohesion'] > 0:
             messages.append(
-                f"✓ {summary['high_cohesion']} files have high cohesion (single stage/phase)"
+                f"  ✓ {summary['high_cohesion']} files have high cohesion (single stage/phase)"
             )
         
         if summary['medium_cohesion'] > 0:
             messages.append(
-                f"⚠ {summary['medium_cohesion']} files have medium cohesion (single phase, multiple stages)"
+                f"  ⚠ {summary['medium_cohesion']} files have medium cohesion (single phase, multiple stages)"
             )
         
         if summary['low_cohesion'] > 0:
             messages.append(
-                f"✗ {summary['low_cohesion']} files have low cohesion (multiple phases)"
+                f"  ✗ {summary['low_cohesion']} files have low cohesion (multiple phases)"
             )
             
+            # List problematic files
             low_cohesion_files = [
-                fp for fp, data in results['files'].items()
+                (fp, data) for fp, data in results['files'].items()
                 if data['cohesion_level'] == 'low'
             ]
             if low_cohesion_files:
                 messages.append("Files needing cohesion refactoring:")
-                for fp in low_cohesion_files:
-                    file_data = results['files'][fp]
+                for fp, file_data in low_cohesion_files:
                     stages = ', '.join(file_data.get('stages_detected', []))
                     phases = ', '.join(file_data.get('phases_detected', []))
-                    script_marker = " [SCRIPT-STYLE]" if file_data.get('is_script_file') else ""
-                    messages.append(f"  - {fp}{script_marker}")
+                    nloc = file_data.get('nloc', 0)
+                    messages.append(f"  - {fp}")
+                    messages.append(f"    NLOC: {nloc} lines")
                     messages.append(f"    Stages: {stages}")
                     messages.append(f"    Phases: {phases}")
         
