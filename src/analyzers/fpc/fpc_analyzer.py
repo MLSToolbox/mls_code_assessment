@@ -1,11 +1,11 @@
 import ast
 import os
 import json
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set
 
 from core.models.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
-from analyzers.ml_content_analyzer import MLContentAnalyzer
+from analyzers.ml_content import MLContentAnalyzer
 from analyzers.fpc.nloc_calculator import NLOCCalculator
 from config.settings import settings
 
@@ -135,7 +135,11 @@ class FPCAnalyzer(BaseAnalyzer):
         nloc = self.nloc_calculator.calculate_nloc(source)
         above_nloc_threshold = self.nloc_calculator.is_above_threshold(nloc)
         
-        ml_content = self.ml_content_analyzer.analyze_file(file_path)
+        ml_result = self.ml_content_analyzer.analyze_file(file_path)
+        has_no_ml_content = ml_result['has_no_ml_content']
+        non_ml_keywords = ml_result['non_ml_keywords_found']
+        
+        ml_content = not has_no_ml_content
         
         functions = self._extract_functions(tree)
         
@@ -177,6 +181,8 @@ class FPCAnalyzer(BaseAnalyzer):
             'function_stages': function_stages,
             'source': 'pipeline_metadata' if file_stages_from_pipeline else 'heuristic',
             'ml_content': ml_content,
+            'has_no_ml_content': has_no_ml_content,
+            'non_ml_keywords_found': non_ml_keywords,
             'nloc': nloc,
             'above_nloc_threshold': above_nloc_threshold,
             'is_script_file': is_script_file
