@@ -5,24 +5,14 @@ from typing import Dict, List, Optional, Tuple, Set
 from collections import defaultdict
 
 from core.models.analysis_result import AnalysisResult
-from core.models.pipeline_overrides import PipelineOverrides  # ✅ CORRECCIÓN #5
+from core.models.pipeline_overrides import PipelineOverrides
 from analyzers.base_analyzer import BaseAnalyzer
 
 
 class PipelineAnalyzer(BaseAnalyzer):
-    """Analyzes code structure to detect ML pipeline stages."""
     
     def __init__(self, session_id: str, local_path: str, config_path: Optional[str] = None):
-        """
-        Initialize PipelineAnalyzer.
-        
-        Args:
-            session_id: Unique session identifier
-            local_path: Path to extracted code
-            config_path: Optional path to pipeline_stages.json
-        """
         super().__init__(session_id, local_path)
-        self._analyzer_id = "Pipeline Structure"
         
         # Required stages for a valid pipeline
         self.required_stages = {
@@ -49,8 +39,7 @@ class PipelineAnalyzer(BaseAnalyzer):
     
     @property
     def analyzer_id(self) -> str:
-        """Unique identifier for this analyzer."""
-        return self._analyzer_id
+        return "pipeline_detection"
     
     def apply_overrides(
         self, 
@@ -192,10 +181,9 @@ class PipelineAnalyzer(BaseAnalyzer):
         
         all_files = self._get_python_files()
         
-        return AnalysisResult(
-            analyzer_id=self.analyzer_id,
+        return self._create_result(
             score=10.0 if is_pipeline else 0.0,
-            message_count={},
+            messages={},
             module_count=len(all_files),
             details={
                 "is_valid_pipeline": is_pipeline,

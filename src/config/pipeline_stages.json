@@ -1,6 +1,6 @@
 {
   "phases": {
-    "data_engineering": ["data_collection", "data_cleaning"],
+    "data_engineering": ["data_collection", "data_cleaning", "data_labeling"],
     "model_development": [
       "feature_engineering",
       "model_training",
@@ -113,6 +113,67 @@
         "validate_data"
       ],
       "imports": []
+    },
+    "data_labeling": {
+      "filename_patterns": [
+        "label",
+        "annotate",
+        "labeling",
+        "annotation",
+        "tag",
+        "tagging",
+        "markup",
+        "categorize"
+      ],
+      "keywords": [
+        "label_data",
+        "annotate_data",
+        "create_labels",
+        "assign_labels",
+        "generate_labels",
+        "add_labels",
+        "manual_labeling",
+        "auto_labeling",
+        "semi_supervised",
+        "active_learning",
+        "label_studio",
+        "labelImg",
+        "annotator",
+        "bounding_box",
+        "polygon_annotation",
+        "semantic_segmentation",
+        "instance_segmentation",
+        "keypoint_annotation",
+        "text_annotation",
+        "sentiment_label",
+        "entity_recognition",
+        "named_entity",
+        "classification_label",
+        "multi_label",
+        "weak_supervision",
+        "snorkel",
+        "labeling_function",
+        "programmatic_labeling",
+        "crowd_labeling",
+        "consensus_labeling",
+        "inter_annotator",
+        "label_quality",
+        "label_noise",
+        "confident_learning",
+        "cleanlab"
+      ],
+      "imports": [
+        "label_studio_sdk",
+        "snorkel",
+        "cleanlab",
+        "labelImg",
+        "cvat",
+        "prodigy",
+        "doccano",
+        "sklearn.semi_supervised",
+        "modAL",
+        "alipy"
+      ]
     },
     "feature_engineering": {
       "filename_patterns": [

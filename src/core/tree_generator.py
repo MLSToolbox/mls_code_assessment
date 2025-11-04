@@ -6,7 +6,6 @@ from typing import Dict, List
 class TreeGenerator:
     """Generates hierarchical file tree structure."""
     
-    # Patterns to exclude from tree
     EXCLUDED_PATTERNS = {
         '__pycache__', '.git', '.pyc', '.pyo', '.pyd',
         'node_modules', 'venv', 'env', '.vscode', '.idea',
@@ -53,18 +52,15 @@ class TreeGenerator:
         if os.path.isfile(path):
             node["size"] = os.path.getsize(path)
             
-            # Validate Python syntax
             if path.endswith('.py'):
                 node["valid_syntax"] = self._is_valid_python(path)
         else:
-            # Directory node
             children = []
             
             try:
                 entries = sorted(os.listdir(path))
                 
                 for entry in entries:
-                    # Skip excluded patterns
                     if self._should_exclude(entry):
                         continue
                     
@@ -92,11 +88,9 @@ class TreeGenerator:
         Returns:
             True if should be excluded
         """
-        # Check exact match
         if name in self.EXCLUDED_PATTERNS:
             return True
         
-        # Check patterns
         for pattern in self.EXCLUDED_PATTERNS:
             if pattern in name:
                 return True

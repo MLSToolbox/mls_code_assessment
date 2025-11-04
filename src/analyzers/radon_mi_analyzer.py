@@ -7,24 +7,22 @@ from analyzers.base_analyzer import BaseAnalyzer
 from core.models.analysis_result import AnalysisResult
 from core.exceptions import AnalyzerError
 
+
 class RadonMIAnalyzer(BaseAnalyzer):
-    """Radon Maintainability Index analyzer."""
     
     @property
     def analyzer_id(self) -> str:
-        return "Radon - Maintainability"
+        return "radon_mi"
     
     def analyze(self, code_path: str = None) -> AnalysisResult:
-        """Analyze maintainability using Radon."""
         target_path = code_path or self.local_path
         
         try:
             mi_data = self._run_maintainability_analysis(target_path)
             
-            return AnalysisResult(
-                analyzer_id=self.analyzer_id,
+            return self._create_result(
                 score=mi_data["average_score"],
-                message_count=mi_data["rank_counts"],
+                messages=mi_data["rank_counts"],
                 module_count=mi_data["module_count"],
                 details=mi_data["details"]
             )
@@ -43,7 +41,6 @@ class RadonMIAnalyzer(BaseAnalyzer):
     def _run_maintainability_analysis(self, target_path: str) -> Dict[str, Any]:
         """Execute radon mi analysis."""
         with self._change_to_project_dir():
-            # After changing to project dir, use current directory
             folders = self._get_project_folders('.')
             
             for folder in folders:
@@ -68,7 +65,6 @@ class RadonMIAnalyzer(BaseAnalyzer):
     def _run_maintainability_report(self, target_path: str) -> bytes:
         """Generate detailed maintainability report."""
         with self._change_to_project_dir():
-            # After changing to project dir, use current directory
             folders = self._get_project_folders('.')
             
             for folder in folders:
@@ -107,11 +103,9 @@ class RadonMIAnalyzer(BaseAnalyzer):
             mi_score = float(module_data['mi'])
             rank = module_data.get('rank', 'C')
             
-            # Update counters
             total_score += mi_score / 10.0  # Normalize to 0-10 scale
             valid_modules += 1
             
-            # Count ranks
             if rank == 'A':
                 rank_counts["Very High"] += 1
             elif rank == 'B':
@@ -119,7 +113,6 @@ class RadonMIAnalyzer(BaseAnalyzer):
             elif rank == 'C':
                 rank_counts["Extremely low"] += 1
             
-            # Store module details
             module_details[module_path] = {
                 "mi_score": mi_score,
                 "rank": rank

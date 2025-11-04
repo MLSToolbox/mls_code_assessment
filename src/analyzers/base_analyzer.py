@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Dict, Any, List, Union
 from core.models.analysis_result import AnalysisResult
 from core.analysis_context import AnalysisContext
 from core.exceptions import AnalyzerError
+from core.metrics import get_metric_metadata
 import os
 
 
@@ -90,7 +91,6 @@ class BaseAnalyzer(ABC):
         for item in os.listdir(target_path):
             item_path = os.path.join(target_path, item)
             if os.path.isdir(item_path):
-                # Check if folder contains Python files
                 has_python = any(
                     f.endswith('.py') 
                     for f in os.listdir(item_path) 
@@ -99,25 +99,66 @@ class BaseAnalyzer(ABC):
                 if has_python:
                     folders.append(item)
         
-        return folders or ['.']  # Current directory if no folders found
+        return folders or ['.']
     
     @property
     @abstractmethod
     def analyzer_id(self) -> str:
+        pass
+    
+    def _create_result(
+        self,
+        score: float,
+        messages: Union[Dict[str, Any], List[Dict[str, Any]]],
+        module_count: int,
+        details: Optional[Dict[str, Any]] = None
+    ) -> AnalysisResult:
         """
-        Unique identifier for this analyzer.
+        Create an AnalysisResult object.
+        
+        Args:
+            score: Numeric score for the analysis
+            messages: Either:
+                - Dict (old format): {'total': int, 'by_file': {...}} for backward compatibility
+                - List[Dict] (new format): List of message dicts with file, diagnosis, recommendation, etc.
+            module_count: Number of modules analyzed
+            details: Optional additional details
         
         Returns:
-            Analyzer identifier string
+            AnalysisResult object
         """
-        pass
+        # Convert list format to proper structure with by_file grouping
+        if isinstance(messages, list):
+            # New format: list of detailed messages
+            by_file = {}
+            for msg in messages:
+                file_path = msg.get('file', 'unknown')
+                if file_path not in by_file:
+                    by_file[file_path] = []
+                by_file[file_path].append({
+                    'diagnosis': msg.get('diagnosis'),
+                    'recommendation': msg.get('recommendation'),
+                    'severity': msg.get('severity'),
+                    'rule_id': msg.get('rule_id')
+                })
+            
+            messages_dict = {
+                'total': len(messages),
+                'by_file': by_file
+            }
+        else:
+            # Old format: dict with total and by_file
+            messages_dict = messages
+        
+        return AnalysisResult(
+            analyzer_id=self.analyzer_id,
+            score=score,
+            messages=messages_dict,
+            module_count=module_count,
+            metric_metadata=get_metric_metadata(self.analyzer_id),
+            details=details
+        )
     
     @abstractmethod
     def analyze(self) -> AnalysisResult:
-        """
-        Run the analysis.
-        
-        Returns:
-            AnalysisResult with metrics and messages
-        """
         pass

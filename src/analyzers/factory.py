@@ -18,7 +18,9 @@ class AnalyzerFactory:
             from analyzers.radon_cc_analyzer import RadonCCAnalyzer
             from analyzers.radon_mi_analyzer import RadonMIAnalyzer
             from analyzers.pipeline_analyzer import PipelineAnalyzer
-            from analyzers.fpc_analyzer import FPCAnalyzer
+            from analyzers.fpc import FPCAnalyzer
+            from analyzers.file_structure_analyzer import FileStructureAnalyzer
+            from analyzers.ml_content import MLContentAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
@@ -26,6 +28,8 @@ class AnalyzerFactory:
                 "radon_mi": RadonMIAnalyzer,
                 "pipeline": PipelineAnalyzer,
                 "fpc": FPCAnalyzer,
+                "file_structure": FileStructureAnalyzer,
+                "ml_content": MLContentAnalyzer,
             }
         return cls._analyzers
     
@@ -37,22 +41,59 @@ class AnalyzerFactory:
         local_path: str,
         context: Optional[AnalysisContext] = None
     ) -> BaseAnalyzer:
-        """Create analyzer instance by type."""
+        """
+        Create analyzer instance by type.
+        
+        Args:
+            analyzer_type: Type of analyzer (e.g., 'pylint', 'fpc', 'file_structure')
+            session_id: Unique session identifier
+            local_path: Path to extracted code
+            context: Shared analysis context (optional)
+            
+        Returns:
+            Initialized analyzer instance
+            
+        Raises:
+            ValueError: If analyzer_type is not registered
+        """
         analyzers = cls._get_analyzers()
         
         if analyzer_type.lower() not in analyzers:
-            raise ValueError(f"Unknown analyzer type: {analyzer_type}")
+            available = ', '.join(analyzers.keys())
+            raise ValueError(
+                f"Unknown analyzer type: '{analyzer_type}'. "
+                f"Available analyzers: {available}"
+            )
         
         analyzer_class = analyzers[analyzer_type.lower()]
         return analyzer_class(session_id, local_path, context)
     
     @classmethod
     def get_available_analyzers(cls) -> list:
-        """Get list of available analyzer types."""
+        """
+        Get list of available analyzer types.
+        
+        Returns:
+            List of analyzer type names
+        """
         return list(cls._get_analyzers().keys())
     
     @classmethod
     def register_analyzer(cls, name: str, analyzer_class: Type[BaseAnalyzer]) -> None:
-        """Register new analyzer type (for plugins/extensions)."""
+        """
+        Register new analyzer type (for plugins/extensions).
+        
+        Args:
+            name: Analyzer identifier
+            analyzer_class: Analyzer class (must inherit from BaseAnalyzer)
+            
+        Raises:
+            TypeError: If analyzer_class doesn't inherit from BaseAnalyzer
+        """
+        if not issubclass(analyzer_class, BaseAnalyzer):
+            raise TypeError(
+                f"{analyzer_class.__name__} must inherit from BaseAnalyzer"
+            )
+        
         analyzers = cls._get_analyzers()
         analyzers[name.lower()] = analyzer_class
