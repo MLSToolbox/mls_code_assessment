@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 class AnalysisResult:
     analyzer_id: str
     score: float
-    message_count: Dict[str, Any]
+    messages: Dict[str, Any]
     module_count: int
     metric_metadata: 'MetricMetadata'
     details: Optional[Dict[str, Any]] = None
@@ -24,7 +24,7 @@ class AnalysisResult:
         return {
             "analyzer_id": self.analyzer_id,
             "score": self.score,
-            "message_count": self._serialize_value(self.message_count),
+            "messages": self._serialize_value(self.messages),
             "module_count": self.module_count,
             "details": self._serialize_value(self.details),
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,

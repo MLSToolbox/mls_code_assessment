@@ -21,7 +21,7 @@ class RadonCCAnalyzer(BaseAnalyzer):
             
             return self._create_result(
                 score=complexity_score,
-                message_count={},
+                messages={},
                 module_count=block_count,
                 details={"complexity_method": "cyclomatic"}
             )

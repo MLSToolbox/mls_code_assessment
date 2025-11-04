@@ -79,7 +79,7 @@ class FileStructureAnalyzer(BaseAnalyzer):
         
         return self._create_result(
             score=round(score, 2),
-            message_count={'messages': messages},
+            messages={'messages': messages},
             module_count=results['summary']['total_files'],
             details=results
         )

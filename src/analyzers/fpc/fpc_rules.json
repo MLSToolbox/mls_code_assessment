@@ -1,0 +1,122 @@
+{
+  "rules": [
+    {
+      "id": 1,
+      "conditions": {
+        "phases": 2,
+        "stages": "any",
+        "ml_content_only": true,
+        "nloc_above_threshold": true
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is low, as it combines code of two unrelated phases, Data Engineering and Model Development phases.",
+      "recommendation_template": "The {module_name} module should be split, at least, into two separate modules, one containing the code of Data Engineering phase and the other containing the code of Model Development phase. If the resulting modules are too long, consider to split them into one module for each stage.",
+      "severity": "high"
+    },
+    {
+      "id": 2,
+      "conditions": {
+        "phases": 2,
+        "stages": "any",
+        "ml_content_only": true,
+        "nloc_above_threshold": false
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is low, as it combines code of two unrelated phases, Data Engineering and Model Development phases.",
+      "recommendation_template": "The {module_name} module is too small (NLOC = {nloc}) but to improve cohesion it should be split into two separate modules, one containing the code of Data Engineering phase and the other containing the code of Model Development phase.",
+      "severity": "medium"
+    },
+    {
+      "id": 3,
+      "conditions": {
+        "phases": 2,
+        "stages": "any",
+        "ml_content_only": false,
+        "nloc_above_threshold": true
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is very low, as it combines code of two unrelated phases, Data Engineering and Model Development phases, and code not related to the pipeline.",
+      "recommendation_template": "The {module_name} module should be split, at least, into three separate modules, one containing the code of Data Engineering phase, one containing the code of Model Development phase and other containing the code unrelated to the pipeline. If the resulting pipeline modules are too long, consider to split them into one module for each stage.",
+      "severity": "critical"
+    },
+    {
+      "id": 4,
+      "conditions": {
+        "phases": 2,
+        "stages": "any",
+        "ml_content_only": false,
+        "nloc_above_threshold": false
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is very low, as it combines code of two unrelated phases, Data Engineering and Model Development phases, and code not related to the pipeline.",
+      "recommendation_template": "The {module_name} module is too small (NLOC = {nloc}) but to improve cohesion, at least, it should be split into two separate modules, one containing the code of pipeline and other containing the code unrelated to the pipeline.",
+      "severity": "high"
+    },
+    {
+      "id": 5,
+      "conditions": {
+        "phases": 1,
+        "stages": ">1",
+        "ml_content_only": true,
+        "nloc_above_threshold": true
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is high, as it combines code of {stage_name_1} stage, {stage_name_2} stage of the {phase_name} phase.",
+      "recommendation_template": "The {module_name} module should be split into different modules, one for each stage.",
+      "severity": "medium"
+    },
+    {
+      "id": 6,
+      "conditions": {
+        "phases": 1,
+        "stages": ">1",
+        "ml_content_only": true,
+        "nloc_above_threshold": false
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is high, as it combines code of {stage_name_1} stage, {stage_name_2} stage of the {phase_name} phase.",
+      "recommendation_template": "The {module_name} module is too small (NLOC = {nloc}) but to improve cohesion it should be split into different modules, one for each stage.",
+      "severity": "low"
+    },
+    {
+      "id": 7,
+      "conditions": {
+        "phases": 1,
+        "stages": ">1",
+        "ml_content_only": false,
+        "nloc_above_threshold": true
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is medium, as it combines code of {stage_name_1} stage, {stage_name_2} stage of the {phase_name} phase and code not related to the pipeline.",
+      "recommendation_template": "The {module_name} module should be split into different modules, one for each stage and one for the code not related to the pipeline.",
+      "severity": "medium"
+    },
+    {
+      "id": 8,
+      "conditions": {
+        "phases": 1,
+        "stages": ">1",
+        "ml_content_only": false,
+        "nloc_above_threshold": false
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is medium, as it combines code of {stage_name_1} stage, {stage_name_2} stage of the {phase_name} phase and code not related to the pipeline.",
+      "recommendation_template": "The {module_name} module is too small (NLOC = {nloc}) but to improve cohesion, at least, it should be split into two different modules, on for the pipeline code and other for the code not related to the pipeline.",
+      "severity": "low"
+    },
+    {
+      "id": 9,
+      "conditions": {
+        "phases": 1,
+        "stages": 1,
+        "ml_content_only": true
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is very high.",
+      "recommendation_template": null,
+      "severity": "info"
+    },
+    {
+      "id": 10,
+      "conditions": {
+        "phases": 1,
+        "stages": 1,
+        "ml_content_only": false
+      },
+      "diagnosis_template": "The cohesion of the {module_name} module is high, as it combines the code of {stage_name_1} stage and the code not related to the pipeline.",
+      "recommendation_template": "The {module_name} module should be split into two separate modules, one containing the code of {stage_name_1} stage and other containing the code unrelated to the pipeline.",
+      "severity": "low"
+    }
+  ]
+}

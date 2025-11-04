@@ -7,6 +7,7 @@ from core.models.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.ml_content import MLContentAnalyzer
 from analyzers.fpc.nloc_calculator import NLOCCalculator
+from analyzers.fpc.fpc_evaluator import FPCEvaluator
 from config.settings import settings
 
 
@@ -50,6 +51,9 @@ class FPCAnalyzer(BaseAnalyzer):
         
         nloc_threshold = settings.ANALYZER_CONFIG.get('fpc', {}).get('nloc_threshold', 30)
         self.nloc_calculator = NLOCCalculator(threshold=nloc_threshold)
+        
+        # Initialize FPC evaluator for rule-based diagnosis/recommendations
+        self.evaluator = FPCEvaluator()
     
     @property
     def analyzer_id(self) -> str:
@@ -84,6 +88,9 @@ class FPCAnalyzer(BaseAnalyzer):
         python_files = self.context.get_python_files()
         results['summary']['total_files'] = len(python_files)
         
+        # List to store per-file messages (new format)
+        messages_list = []
+        
         for py_file in python_files:
             tree = self.context.get_file_ast(py_file)
             source = self.context.get_file_source(py_file)
@@ -96,6 +103,12 @@ class FPCAnalyzer(BaseAnalyzer):
             
             self.context.set_file_metric(py_file, 'fpc', file_result)
             
+            # Use evaluator to generate diagnosis/recommendation message
+            evaluation = self.evaluator.evaluate_file(py_file, file_result)
+            if evaluation:
+                messages_list.append(evaluation)
+            
+            # Update summary counters (for scoring)
             if not file_result['ml_content']:
                 results['summary']['non_ml_files'] += 1
             elif not file_result['above_nloc_threshold']:
@@ -114,11 +127,9 @@ class FPCAnalyzer(BaseAnalyzer):
         else:
             score = 0
         
-        messages = self._generate_messages(results)
-        
         return self._create_result(
             score=round(score, 2),
-            message_count={'messages': messages},
+            messages=messages_list,  # Use new list format
             module_count=results['summary']['total_files'],
             details=results
         )
@@ -375,77 +386,3 @@ class FPCAnalyzer(BaseAnalyzer):
             # Normalize to 0-10 scale
             return round((total_score / (counted_files * 10)) * 10, 2)
         return 0
-    
-    def _generate_messages(self, results: Dict) -> List[str]:
-        """Generate human-readable messages."""
-        messages = []
-        summary = results['summary']
-        
-        # Scan mode info
-        scan_mode_text = {
-            'all_files': 'all Python files in project',
-            'ml_only': 'ML pipeline files only',
-            'all_files_fallback': 'all Python files (no pipeline detected)'
-        }
-        mode = summary['scan_mode']
-        messages.append(
-            f"Analyzed {summary['total_files']} files ({scan_mode_text.get(mode, mode)})"
-        )
-        
-        # ML content summary
-        if summary['non_ml_files'] > 0:
-            messages.append(
-                f"ℹ {summary['non_ml_files']} files without ML content (excluded from cohesion evaluation)"
-            )
-        
-        # Small files summary
-        if summary['small_files'] > 0:
-            messages.append(
-                f"ℹ {summary['small_files']} files below NLOC threshold "
-                f"({summary['nloc_threshold']} lines) - marked but not penalized"
-            )
-        
-        # Cohesion summary
-        evaluated_files = (
-            summary['high_cohesion'] + 
-            summary['medium_cohesion'] + 
-            summary['low_cohesion']
-        )
-        
-        if evaluated_files > 0:
-            messages.append(
-                f"Evaluated {evaluated_files} ML files for cohesion:"
-            )
-        
-        if summary['high_cohesion'] > 0:
-            messages.append(
-                f"  ✓ {summary['high_cohesion']} files have high cohesion (single stage/phase)"
-            )
-        
-        if summary['medium_cohesion'] > 0:
-            messages.append(
-                f"  ⚠ {summary['medium_cohesion']} files have medium cohesion (single phase, multiple stages)"
-            )
-        
-        if summary['low_cohesion'] > 0:
-            messages.append(
-                f"  ✗ {summary['low_cohesion']} files have low cohesion (multiple phases)"
-            )
-            
-            # List problematic files
-            low_cohesion_files = [
-                (fp, data) for fp, data in results['files'].items()
-                if data['cohesion_level'] == 'low'
-            ]
-            if low_cohesion_files:
-                messages.append("Files needing cohesion refactoring:")
-                for fp, file_data in low_cohesion_files:
-                    stages = ', '.join(file_data.get('stages_detected', []))
-                    phases = ', '.join(file_data.get('phases_detected', []))
-                    nloc = file_data.get('nloc', 0)
-                    messages.append(f"  - {fp}")
-                    messages.append(f"    NLOC: {nloc} lines")
-                    messages.append(f"    Stages: {stages}")
-                    messages.append(f"    Phases: {phases}")
-        
-        return messages

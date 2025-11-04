@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Union
 from core.models.analysis_result import AnalysisResult
 from core.analysis_context import AnalysisContext
 from core.exceptions import AnalyzerError
@@ -109,14 +109,40 @@ class BaseAnalyzer(ABC):
     def _create_result(
         self,
         score: float,
-        message_count: Dict[str, Any],
+        messages: Union[Dict[str, Any], List[Dict[str, Any]]],
         module_count: int,
         details: Optional[Dict[str, Any]] = None
     ) -> AnalysisResult:
+        """
+        Create an AnalysisResult object.
+        
+        Args:
+            score: Numeric score for the analysis
+            messages: Either:
+                - Dict (old format): {'total': int, 'by_file': {...}} for backward compatibility
+                - List[Dict] (new format): List of message dicts with file, diagnosis, recommendation, etc.
+            module_count: Number of modules analyzed
+            details: Optional additional details
+        
+        Returns:
+            AnalysisResult object
+        """
+        # Convert old format to new format if needed
+        if isinstance(messages, list):
+            # New format: list of detailed messages
+            messages_dict = {
+                'total': len(messages),
+                'by_file': {},
+                'details': messages
+            }
+        else:
+            # Old format: dict with total and by_file
+            messages_dict = messages
+        
         return AnalysisResult(
             analyzer_id=self.analyzer_id,
             score=score,
-            message_count=message_count,
+            messages=messages_dict,
             module_count=module_count,
             metric_metadata=get_metric_metadata(self.analyzer_id),
             details=details

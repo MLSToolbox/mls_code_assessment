@@ -183,7 +183,7 @@ class PipelineAnalyzer(BaseAnalyzer):
         
         return self._create_result(
             score=10.0 if is_pipeline else 0.0,
-            message_count={},
+            messages={},
             module_count=len(all_files),
             details={
                 "is_valid_pipeline": is_pipeline,
