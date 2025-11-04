@@ -91,7 +91,15 @@ class FPCAnalyzer(BaseAnalyzer):
         # List to store per-file messages (new format)
         messages_list = []
         
+        # Track processed files to avoid duplicates
+        processed_files = set()
+        
         for py_file in python_files:
+            # Skip if already processed (avoid duplicates)
+            if py_file in processed_files:
+                continue
+            processed_files.add(py_file)
+            
             tree = self.context.get_file_ast(py_file)
             source = self.context.get_file_source(py_file)
             

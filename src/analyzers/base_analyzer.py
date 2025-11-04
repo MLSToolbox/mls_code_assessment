@@ -127,13 +127,24 @@ class BaseAnalyzer(ABC):
         Returns:
             AnalysisResult object
         """
-        # Convert old format to new format if needed
+        # Convert list format to proper structure with by_file grouping
         if isinstance(messages, list):
             # New format: list of detailed messages
+            by_file = {}
+            for msg in messages:
+                file_path = msg.get('file', 'unknown')
+                if file_path not in by_file:
+                    by_file[file_path] = []
+                by_file[file_path].append({
+                    'diagnosis': msg.get('diagnosis'),
+                    'recommendation': msg.get('recommendation'),
+                    'severity': msg.get('severity'),
+                    'rule_id': msg.get('rule_id')
+                })
+            
             messages_dict = {
                 'total': len(messages),
-                'by_file': {},
-                'details': messages
+                'by_file': by_file
             }
         else:
             # Old format: dict with total and by_file
