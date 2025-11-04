@@ -43,6 +43,12 @@ class Settings:
             "min": "A",
             "max": "C",
             "show_complexity": True
+        },
+        "fpc": {
+            # Minimum number of lines of code for a file to be considered 
+            # in cohesion evaluation. Files below this threshold will be 
+            # analyzed but marked as "too_small" if they show low cohesion.
+            "nloc_threshold": 30
         }
     }
 

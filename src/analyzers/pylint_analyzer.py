@@ -26,7 +26,7 @@ class PyLintAnalyzer(BaseAnalyzer):
             
             return self._create_result(
                 score=json_output["statistics"]["score"],
-                message_count=json_output["statistics"]["messageTypeCount"],
+                messages=json_output["statistics"]["messageTypeCount"],
                 module_count=json_output["statistics"]["modulesLinted"],
                 details=self._extract_details(json_output)
             )

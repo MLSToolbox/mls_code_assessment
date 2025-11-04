@@ -18,9 +18,9 @@ class AnalyzerFactory:
             from analyzers.radon_cc_analyzer import RadonCCAnalyzer
             from analyzers.radon_mi_analyzer import RadonMIAnalyzer
             from analyzers.pipeline_analyzer import PipelineAnalyzer
-            from analyzers.fpc_analyzer import FPCAnalyzer
-            from analyzers.pfp_analyzer import PFPAnalyzer
+            from analyzers.fpc import FPCAnalyzer
             from analyzers.file_structure_analyzer import FileStructureAnalyzer
+            from analyzers.ml_content import MLContentAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
@@ -30,6 +30,7 @@ class AnalyzerFactory:
                 "fpc": FPCAnalyzer,
                 "pfp": PFPAnalyzer,
                 "file_structure": FileStructureAnalyzer,
+                "ml_content": MLContentAnalyzer,
             }
         return cls._analyzers
     

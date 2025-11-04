@@ -22,7 +22,7 @@ class RadonMIAnalyzer(BaseAnalyzer):
             
             return self._create_result(
                 score=mi_data["average_score"],
-                message_count=mi_data["rank_counts"],
+                messages=mi_data["rank_counts"],
                 module_count=mi_data["module_count"],
                 details=mi_data["details"]
             )
