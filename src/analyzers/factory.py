@@ -21,6 +21,7 @@ class AnalyzerFactory:
             from analyzers.fpc import FPCAnalyzer
             from analyzers.file_structure_analyzer import FileStructureAnalyzer
             from analyzers.ml_content import MLContentAnalyzer
+            from analyzers.lccml_analyzer import LCCMLAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
@@ -30,6 +31,7 @@ class AnalyzerFactory:
                 "fpc": FPCAnalyzer,
                 "file_structure": FileStructureAnalyzer,
                 "ml_content": MLContentAnalyzer,
+                "lccml": LCCMLAnalyzer,
             }
         return cls._analyzers
     
