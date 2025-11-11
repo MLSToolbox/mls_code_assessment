@@ -4,22 +4,36 @@ from collections import defaultdict
 
 from core.models.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
+from analyzers.pfp.pfp_calculator import PFPCalculator
+from analyzers.pfp.pfp_evaluator import PFPEvaluator
 from core.exceptions import AnalyzerError
-from core.metrics import get_metric_metadata
+
 
 class PFPAnalyzer(BaseAnalyzer):
     """
     Analyzes Package Functional Purity (PFP).
-    This metric measures how focused a package is on a specific ML pipeline function.
-    It depends on the results of the FPCAnalyzer.
-    """
-
     
-    ETAPAS_MAX = 5
+    This metric measures how focused a package is on a specific ML pipeline function.
+    It depends on the results of the FPCAnalyzer and reuses FPC metrics at package level.
+    
+    Architecture (modular approach like FPC):
+    - PFPAnalyzer: Main analyzer, orchestrates analysis
+    - PFPCalculator: Handles PFP score calculation
+    - PFPEvaluator: Matches metrics against rules, generates diagnosis/recommendations
+    """
 
     @property
     def analyzer_id(self) -> str:
-        return "PFP"
+        return "pfp"
+    
+    def __init__(self, session_id: str, local_path: str, context=None):
+        super().__init__(session_id, local_path, context)
+        
+        # Initialize PFP calculator with updated ETAPAS_MAX = 6
+        self.calculator = PFPCalculator(etapas_max=6)
+        
+        # Initialize PFP evaluator for rule-based diagnosis/recommendations
+        self.evaluator = PFPEvaluator()
 
     def analyze(self) -> AnalysisResult:
         """
@@ -38,90 +52,90 @@ class PFPAnalyzer(BaseAnalyzer):
         package_results = {}
         total_pfp_score = 0
         
+        # List to store per-package messages (following FPC pattern)
+        messages_list = []
+        
         if not packages:
-            return AnalysisResult(
-                analyzer_id=self.analyzer_id,
+            return self._create_result(
                 score=10.0, 
-                message_count={},
+                messages=[],
                 module_count=0,
-                metric_metadata=get_metric_metadata("pfp"),
                 details={"message": "No Python packages found to analyze."}
             )
 
         for pkg_path, modules in packages.items():
-            
-            package_results[pkg_path] = self._analyze_package(modules)
+            package_results[pkg_path] = self._analyze_package(pkg_path, modules)
             total_pfp_score += package_results[pkg_path]['pfp_score']
+            
+            # Use evaluator to generate diagnosis/recommendation message
+            evaluation = self.evaluator.evaluate_package(pkg_path, package_results[pkg_path])
+            if evaluation:
+                messages_list.append(evaluation)
 
-        
         average_pfp = total_pfp_score / len(packages)
         final_score = round(average_pfp * 10, 2)
         
         purity_distribution = self._get_purity_distribution(package_results)
 
-        return AnalysisResult(
-            analyzer_id=self.analyzer_id,
+        return self._create_result(
             score=final_score,
-            message_count=self._generate_summary(package_results),
+            messages=messages_list,  # Use list format like FPC
             module_count=len(self.context.get_all_python_files()),
-            metric_metadata=get_metric_metadata("pfp"),
             details={
                 "summary": {
                     "total_packages_analyzed": len(packages),
                     "average_pfp_score": round(average_pfp, 4),
-                    "overall_quality": self._get_overall_quality(average_pfp),
+                    "overall_quality": self.calculator.get_overall_quality(average_pfp),
                     "packages_by_purity": purity_distribution,
                     "packages_needing_attention": len([p for p in package_results.values() if p['pfp_score'] < 0.6]),
-                    "packages_with_good_purity": len([p for p in package_results.values() if p['pfp_score'] >= 0.6])
+                    "packages_with_good_purity": len([p for p in package_results.values() if p['pfp_score'] >= 0.6]),
+                    "etapas_max": self.calculator.get_etapas_max(),
+                    "purity_summary": self._generate_summary(package_results)
                 },
                 "packages": self._format_package_results(package_results)
             }
         )
 
-    def _analyze_package(self, modules: List[str]) -> Dict[str, Any]:
-        """Calculates PFP for a single package."""
-        n_total = len(modules) 
-        n_ml = 0
-        all_stages: Set[str] = set()
-        modules_info: List[Dict[str, Any]] = []
-
-
+    def _analyze_package(self, pkg_path: str, modules: List[str]) -> Dict[str, Any]:
+        """
+        Calculates PFP for a single package by reusing FPC metrics.
+        
+        Args:
+            pkg_path: Package directory path
+            modules: List of module file paths in package
+            
+        Returns:
+            Dictionary with package PFP metrics
+        """
+        # Collect FPC results for all modules in package
+        fpc_results = []
         for module_path in modules:
             fpc_result = self.context.get_file_metric(module_path, 'fpc')
-            
-            if fpc_result and fpc_result.get('stages_detected'):
-                n_ml += 1
-                all_stages.update(fpc_result['stages_detected'])
-                modules_info.append({
-                    'path': module_path,
-                    'stages': list(fpc_result.get('stages_detected', [])),
-                    'cohesion': fpc_result.get('cohesion_level')
-                })
-            else:
-                modules_info.append({
-                    'path': module_path,
-                    'stages': [],
-                    'cohesion': None
-                })
-
-       
+            if fpc_result:
+                fpc_result['file_path'] = module_path
+                fpc_results.append(fpc_result)
+        
+        # Aggregate FPC metrics to package level
+        aggregated = self.calculator.aggregate_package_metrics(fpc_results)
+        
+        n_total = aggregated['n_total']
+        n_ml = aggregated['n_ml']
+        all_stages = aggregated['all_stages']
+        modules_info = aggregated['modules_info']
+        
         n_etapas = len(all_stages)
-        cf = 1.0
-        if self.ETAPAS_MAX > 1 and n_etapas > 1:
-            cf = 1 - ((n_etapas - 1) / (self.ETAPAS_MAX - 1))
-
-       
-        pfp_score = 0
-        if n_total > 0:
-            pfp_score = (n_ml / n_total) * cf
-            
+        
+        # Calculate PFP using calculator
+        pfp_score = self.calculator.calculate_pfp(n_total, n_ml, n_etapas)
+        purity_level = self.calculator.get_purity_level(pfp_score)
+        
         return {
             "total_modules": n_total,
             "ml_modules": n_ml,
             "unique_stages_found": n_etapas,
             "stage_types": sorted(list(all_stages)),
-            "pfp_score": round(pfp_score, 4),
-            "purity_level": self._get_purity_level(pfp_score),
+            "pfp_score": pfp_score,
+            "purity_level": purity_level,
             "modules": modules_info
         }
         
@@ -148,27 +162,6 @@ class PFPAnalyzer(BaseAnalyzer):
             if self.context.has_file_metric(py_file, 'fpc'):
                 return True
         return False
-        
-    def _get_purity_level(self, score: float) -> str:
-        """Determines a qualitative purity level from a PFP score."""
-        if score > 0.8:
-            return "High"
-        if score >= 0.6:
-            return "Moderate"
-        if score >= 0.4:
-            return "Low"
-        return "Very Low"
-    
-    def _get_overall_quality(self, average_pfp: float) -> str:
-        """Determines overall project quality based on average PFP."""
-        if average_pfp > 0.8:
-            return "Excellent"
-        if average_pfp >= 0.6:
-            return "Good"
-        if average_pfp >= 0.4:
-            return "Fair"
-       
-        return "Critical"
     
     def _get_purity_distribution(self, results: Dict) -> Dict[str, int]:
         """Gets distribution of packages by purity level."""
@@ -216,6 +209,7 @@ class PFPAnalyzer(BaseAnalyzer):
         return {
             'data_collection': ['data', 'data/collection', 'data/ingest'],
             'data_cleaning': ['data/preprocessing', 'data/cleaning', 'data/prep'],
+            'data_labeling': ['data/labeling', 'data/annotation', 'labeling'],
             'feature_engineering': ['features', 'feature_engineering', 'features/processing'],
             'model_training': ['training', 'training/models', 'training/experiments'],
             'model_evaluation': ['evaluation', 'evaluation/metrics', 'validation']

@@ -1,0 +1,103 @@
+{
+  "rules": [
+    {
+      "id": 1,
+      "conditions": {
+        "purity_level": "Very Low",
+        "has_ml_content": true,
+        "stage_count": ">1"
+      },
+      "diagnosis_template": "The purity of package '{package_name}' is very low (PFP = {pfp_score:.2f}). It contains {ml_modules}/{total_modules} ML modules spanning {stage_count} different pipeline stages: {stages_list}.",
+      "recommendation_template": "HIGH PRIORITY: Split package '{package_name}' by pipeline stage responsibility. Move files to stage-specific packages to achieve single responsibility. See detailed file move suggestions in the package recommendations.",
+      "severity": "critical"
+    },
+    {
+      "id": 2,
+      "conditions": {
+        "purity_level": "Very Low",
+        "has_ml_content": true,
+        "stage_count": 1
+      },
+      "diagnosis_template": "The purity of package '{package_name}' is very low (PFP = {pfp_score:.2f}) despite focusing on a single stage. Only {ml_modules}/{total_modules} modules contain ML content.",
+      "recommendation_template": "Move non-ML modules ({non_ml_count} files) to a separate utilities package to increase purity. Consider creating '{package_name}/utils' or using a top-level 'utils' package.",
+      "severity": "high"
+    },
+    {
+      "id": 3,
+      "conditions": {
+        "purity_level": "Very Low",
+        "has_ml_content": false,
+        "stage_count": 0
+      },
+      "diagnosis_template": "Package '{package_name}' contains no ML-related modules (PFP = {pfp_score:.2f}). All {total_modules} modules are utility or support code.",
+      "recommendation_template": "This package should be renamed or documented as a non-ML utilities package. Consider moving it outside the ML pipeline structure or clearly marking it as infrastructure/utils.",
+      "severity": "medium"
+    },
+    {
+      "id": 4,
+      "conditions": {
+        "purity_level": "Low",
+        "has_ml_content": true,
+        "stage_count": ">1"
+      },
+      "diagnosis_template": "The purity of package '{package_name}' is low (PFP = {pfp_score:.2f}). It mixes {stage_count} pipeline stages: {stages_list}.",
+      "recommendation_template": "MEDIUM PRIORITY: Refactor package '{package_name}' to focus on a single pipeline stage. Move minority-stage files to appropriate stage-specific packages. The dominant stage is '{dominant_stage}'.",
+      "severity": "high"
+    },
+    {
+      "id": 5,
+      "conditions": {
+        "purity_level": "Low",
+        "has_ml_content": true,
+        "stage_count": 1
+      },
+      "diagnosis_template": "Package '{package_name}' has low purity (PFP = {pfp_score:.2f}) despite single-stage focus. Only {ml_modules}/{total_modules} modules are ML-related.",
+      "recommendation_template": "Separate non-ML modules from ML pipeline code. Move {non_ml_count} non-ML files to a utilities package to improve separation of concerns.",
+      "severity": "medium"
+    },
+    {
+      "id": 6,
+      "conditions": {
+        "purity_level": "Moderate",
+        "has_ml_content": true,
+        "stage_count": ">1"
+      },
+      "diagnosis_template": "Package '{package_name}' has moderate purity (PFP = {pfp_score:.2f}). It contains {ml_modules} ML modules across {stage_count} stages: {stages_list}.",
+      "recommendation_template": "Consider splitting '{package_name}' if it grows larger. Current stage mixing is acceptable but may become problematic as the codebase scales. The dominant stage is '{dominant_stage}'.",
+      "severity": "low"
+    },
+    {
+      "id": 7,
+      "conditions": {
+        "purity_level": "Moderate",
+        "has_ml_content": true,
+        "stage_count": 1
+      },
+      "diagnosis_template": "Package '{package_name}' has moderate purity (PFP = {pfp_score:.2f}). It focuses on {stages_list} but includes some non-ML code.",
+      "recommendation_template": "Package structure is acceptable. To reach high purity, move remaining {non_ml_count} non-ML modules to a separate utilities package.",
+      "severity": "low"
+    },
+    {
+      "id": 8,
+      "conditions": {
+        "purity_level": "High",
+        "has_ml_content": true,
+        "stage_count": 1
+      },
+      "diagnosis_template": "Package '{package_name}' has excellent purity (PFP = {pfp_score:.2f}). It maintains strong single-stage focus on {stages_list} with {ml_modules}/{total_modules} ML modules.",
+      "recommendation_template": "No refactoring needed. Package '{package_name}' demonstrates excellent single responsibility principle adherence. Maintain this structure as the codebase grows.",
+      "severity": "info"
+    },
+    {
+      "id": 9,
+      "conditions": {
+        "purity_level": "High",
+        "has_ml_content": true,
+        "stage_count": ">1"
+      },
+      "diagnosis_template": "Package '{package_name}' has high purity (PFP = {pfp_score:.2f}) with mostly ML content, but spans {stage_count} stages: {stages_list}.",
+      "recommendation_template": "Consider splitting by stage as the package grows. Current structure is acceptable for small packages but may benefit from stage separation for better maintainability.",
+      "severity": "info"
+    }
+  ]
+}
