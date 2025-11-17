@@ -52,7 +52,7 @@ METRICS_REGISTRY = {
         formula=(
             "Score = 10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10)"
         ),
-        ideal_range={"min": -float('inf'), "max": 10.0, "optimal": ">8.0", "acceptable": "7.0-8.0", "warning": "<7.0"},
+        ideal_range={"min": None, "max": 10.0, "optimal": ">8.0", "acceptable": "7.0-8.0", "warning": "<7.0"},
         interpretation={
             "9.0-10.0": "Excellent - very few issues detected",
             "8.0-8.9": "Good - minor improvements possible",

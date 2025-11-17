@@ -54,8 +54,8 @@ def validate_pipeline_overrides(overrides: Dict) -> Tuple[bool, str]:
         
         valid_stages = {
             "data_collection",
-            "data_cleaning",        # Optional
-            "feature_engineering",  # Optional
+            "data_cleaning", 
+            "feature_engineering",
             "model_training",
             "model_evaluation"
         }

@@ -131,11 +131,24 @@ class LCCMLAnalyzer(BaseAnalyzer):
         else:
             score = 0
         
-        messages = self._generate_messages(results)
+        # Generate file-level messages for files with cohesion issues
+        messages = []
+        for file_path, file_data in results['files'].items():
+            if file_data['lccml'] is not None:
+                cohesion_level = self._categorize_cohesion(file_data['lccml'])
+                if cohesion_level in ['low', 'very_low']:
+                    severity = 'high' if cohesion_level == 'very_low' else 'medium'
+                    messages.append({
+                        'file': file_path,
+                        'diagnosis': f"Low cohesion detected (LCCML: {file_data['lccml']:.2f}). Methods are not well connected.",
+                        'recommendation': f"Consider refactoring this module to improve method connectivity. {file_data['n_disconnected_pairs']} disconnected method pairs found.",
+                        'severity': severity,
+                        'rule_id': 1
+                    })
         
         return self._create_result(
             score=round(score, 2),
-            messages={'messages': messages},
+            messages=messages,
             module_count=results['summary']['total_files'],
             details=results
         )
@@ -187,6 +200,15 @@ class LCCMLAnalyzer(BaseAnalyzer):
         )
         n_connected_pairs = len(connected_pairs)
         
+        # Calculate disconnected pairs
+        all_possible_pairs = set()
+        method_names = list(methods.keys())
+        for i, method_a in enumerate(method_names):
+            for method_b in method_names[i+1:]:
+                all_possible_pairs.add((method_a, method_b))
+        
+        disconnected_pairs = all_possible_pairs - connected_pairs
+        
         # Calculate LCCML
         lccml = n_connected_pairs / n_possible_pairs if n_possible_pairs > 0 else 0
         
@@ -198,6 +220,8 @@ class LCCMLAnalyzer(BaseAnalyzer):
             'n_methods': n_methods,
             'n_possible_pairs': n_possible_pairs,
             'n_connected_pairs': n_connected_pairs,
+            'n_disconnected_pairs': len(disconnected_pairs),
+            'disconnected_pairs': sorted(list(disconnected_pairs)),
             'connection_breakdown': {
                 'by_variables': len(connections['by_variables']),
                 'by_files': len(connections['by_files']),
@@ -440,6 +464,27 @@ class LCCMLAnalyzer(BaseAnalyzer):
             
             if summary['low_cohesion'] > 0:
                 messages.append(f"  ✗ {summary['low_cohesion']} low (LCCML 0.2-0.39)")
+                
+                # List files with low cohesion
+                low_cohesion_files = [
+                    (fp, data) for fp, data in results['files'].items()
+                    if data.get('cohesion_level') == 'low'
+                ]
+                if low_cohesion_files:
+                    messages.append("Files with low cohesion:")
+                    for fp, file_data in low_cohesion_files[:3]:  # Show max 3
+                        lccml = file_data.get('lccml', 0)
+                        n_disconnected = file_data.get('n_disconnected_pairs', 0)
+                        disconnected_pairs = file_data.get('disconnected_pairs', [])
+                        
+                        messages.append(f"  - {fp} (LCCML: {lccml:.3f})")
+                        if disconnected_pairs and n_disconnected > 0:
+                            messages.append(f"    Disconnected pairs ({n_disconnected}):")
+                            for pair in disconnected_pairs[:5]:
+                                messages.append(f"      • {pair[0]} ↔ {pair[1]}")
+                            if len(disconnected_pairs) > 5:
+                                remaining = len(disconnected_pairs) - 5
+                                messages.append(f"      ... and {remaining} more")
             
             if summary['very_low_cohesion'] > 0:
                 messages.append(f"  ✗ {summary['very_low_cohesion']} very low (LCCML < 0.2)")
@@ -456,8 +501,20 @@ class LCCMLAnalyzer(BaseAnalyzer):
                         n_methods = file_data.get('n_methods', 0)
                         n_connected = file_data.get('n_connected_pairs', 0)
                         n_possible = file_data.get('n_possible_pairs', 1)
+                        n_disconnected = file_data.get('n_disconnected_pairs', 0)
+                        disconnected_pairs = file_data.get('disconnected_pairs', [])
+                        
                         messages.append(f"  - {fp}")
                         messages.append(f"    LCCML: {lccml:.3f} ({n_connected}/{n_possible} pairs connected)")
                         messages.append(f"    Methods: {n_methods}")
+                        
+                        if disconnected_pairs and n_disconnected > 0:
+                            messages.append(f"    Disconnected pairs ({n_disconnected}):")
+                            # Show max 10 disconnected pairs per file
+                            for pair in disconnected_pairs[:10]:
+                                messages.append(f"      • {pair[0]} ↔ {pair[1]}")
+                            if len(disconnected_pairs) > 10:
+                                remaining = len(disconnected_pairs) - 10
+                                messages.append(f"      ... and {remaining} more")
         
         return messages
