@@ -37,6 +37,7 @@ class PipelineAnalyzer(BaseAnalyzer):
 
             else:
                 
+                
                 self.config = self._default_config()
     
     @property

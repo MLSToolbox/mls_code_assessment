@@ -8,7 +8,6 @@ from analyzers.pfp.pfp_calculator import PFPCalculator
 from analyzers.pfp.pfp_evaluator import PFPEvaluator
 from core.exceptions import AnalyzerError
 
-
 class PFPAnalyzer(BaseAnalyzer):
     """
     Analyzes Package Functional Purity (PFP).
@@ -40,13 +39,8 @@ class PFPAnalyzer(BaseAnalyzer):
         Runs the PFP analysis for all packages in the project.
 
         It relies on the FPC analysis results being available in the context.
+        Dependencies are automatically resolved by the @requires decorator.
         """
- 
-        if not self._is_fpc_data_available():
-            raise AnalyzerError(
-                "PFP analysis requires FPC analysis to be run first. "
-                "Please include 'fpc' in the list of analyzers."
-            )
 
         packages = self._discover_packages()
         package_results = {}
@@ -75,7 +69,7 @@ class PFPAnalyzer(BaseAnalyzer):
         average_pfp = total_pfp_score / len(packages)
         final_score = round(average_pfp * 10, 2)
         
-        purity_distribution = self._get_purity_distribution(package_results)
+        
 
         return self._create_result(
             score=final_score,
@@ -86,7 +80,6 @@ class PFPAnalyzer(BaseAnalyzer):
                     "total_packages_analyzed": len(packages),
                     "average_pfp_score": round(average_pfp, 4),
                     "overall_quality": self.calculator.get_overall_quality(average_pfp),
-                    "packages_by_purity": purity_distribution,
                     "packages_needing_attention": len([p for p in package_results.values() if p['pfp_score'] < 0.6]),
                     "packages_with_good_purity": len([p for p in package_results.values() if p['pfp_score'] >= 0.6]),
                     "etapas_max": self.calculator.get_etapas_max(),
@@ -125,6 +118,11 @@ class PFPAnalyzer(BaseAnalyzer):
         
         n_etapas = len(all_stages)
         
+        # Get phases from FPC analysis (already calculated)
+        all_phases = set()
+        for fpc_result in fpc_results:
+            all_phases.update(fpc_result.get('phases_detected', []))
+        
         # Calculate PFP using calculator
         pfp_score = self.calculator.calculate_pfp(n_total, n_ml, n_etapas)
         purity_level = self.calculator.get_purity_level(pfp_score)
@@ -134,6 +132,7 @@ class PFPAnalyzer(BaseAnalyzer):
             "ml_modules": n_ml,
             "unique_stages_found": n_etapas,
             "stage_types": sorted(list(all_stages)),
+            "phases_detected": sorted(list(all_phases)),
             "pfp_score": pfp_score,
             "purity_level": purity_level,
             "modules": modules_info
@@ -163,13 +162,7 @@ class PFPAnalyzer(BaseAnalyzer):
                 return True
         return False
     
-    def _get_purity_distribution(self, results: Dict) -> Dict[str, int]:
-        """Gets distribution of packages by purity level."""
-        distribution = {"High": 0, "Moderate": 0, "Low": 0, "Very Low": 0}
-        for data in results.values():
-            level = data['purity_level']
-            distribution[level] += 1
-        return distribution
+    
     
     def _format_package_results(self, results: Dict) -> Dict:
         """Formats package results with better structure."""
@@ -179,21 +172,17 @@ class PFPAnalyzer(BaseAnalyzer):
                 "metrics": {
                     "total_modules": data['total_modules'],
                     "ml_modules": data['ml_modules'],
-                    "ml_ratio": round(data['ml_modules'] / data['total_modules'], 2) if data['total_modules'] > 0 else 0,
                     "pfp_score": data['pfp_score'],
                     "purity_level": data['purity_level']
                 },
-                "pipeline_stages": {
-                    "detected_stages": data['stage_types'],
-                    "stage_count": data['unique_stages_found'],
-                    "is_focused": data['unique_stages_found'] <= 1
-                },
+                "phases_detected": data['phases_detected'],
+                "stages_detected": data['stage_types'],
                 "quality_indicators": {
                     "needs_refactoring": data['pfp_score'] < 0.6,
                     "has_ml_content": data['ml_modules'] > 0,
                     "is_pure_package": data['ml_modules'] == data['total_modules'] and data['unique_stages_found'] == 1
                 },
-                "recommendations": self._generate_recommendations(pkg_path, data)
+             
             }
         return formatted
         
@@ -273,67 +262,4 @@ class PFPAnalyzer(BaseAnalyzer):
             return f"MEDIUM PRIORITY: PFP {pfp_score:.2f} — consider moving the listed files and consolidating ML logic into '{package_path}/{dominant_stage}' or suggested packages."
         return None
     
-    def _generate_recommendations(self, package_path: str, package_data: Dict) -> List[str]:
-        """Orchestrates generation of actionable recommendations for a package."""
-        recommendations: List[str] = []
-
-        pfp_score = package_data['pfp_score']
-        n_ml = package_data['ml_modules']
-        n_total = package_data['total_modules']
-        n_stages = package_data['unique_stages_found']
-        modules = package_data.get('modules', [])
-
-        if n_ml == 0:
-            recommendations.append(
-                "This package contains no ML-related modules. Consider moving utility code "
-                "to a dedicated utilities package or documenting its non-ML responsibility."
-            )
-            return recommendations
-
-        if n_ml < max(1, int(n_total * 0.5)):
-            recommendations.append(
-                f"Only {n_ml}/{n_total} modules are ML-related. Move non-ML modules to a "
-                f"separate package (e.g., '{package_path}/utils' or a top-level 'utils' package) "
-                f"to increase purity."
-            )
-
-        if n_stages <= 1:
-            if pfp_score < 0.6:
-                recommendations.append(
-                    f"Package '{package_path}' has low PFP ({pfp_score:.2f}) despite being focused; "
-                    f"inspect non-ML modules or thin ML implementations and consolidate ML logic "
-                    f"into fewer modules."
-                )
-            return recommendations
-
-        stage_to_suggested_pkgs = self._get_stage_to_package_mapping()
-        files_by_stage = self._classify_modules_by_stage(modules)
-        dominant_stage = self._identify_dominant_stage(files_by_stage)
-
-        moves = self._generate_file_move_suggestions(
-            files_by_stage, 
-            dominant_stage, 
-            stage_to_suggested_pkgs
-        )
-
-        if moves:
-            recommendations.append(
-                f"Package '{package_path}' spans multiple pipeline stages "
-                f"({', '.join(package_data['stage_types'])}). Suggested file moves to increase purity:"
-            )
-            recommendations.extend(moves[:5])
-
-        deploy_candidates = self._detect_deployment_candidates(modules)
-        if deploy_candidates:
-            for file_path in deploy_candidates[:3]:
-                recommendations.append(
-                    f"Consider moving deployment/registry helper '{file_path}' to a dedicated "
-                    f"package like 'deployment' or 'registry' (e.g., 'src/deployment/{os.path.basename(file_path)}') "
-                    f"to improve separation of concerns."
-                )
-
-        priority_msg = self._generate_priority_message(pfp_score, package_path, dominant_stage)
-        if priority_msg:
-            recommendations.append(priority_msg)
-
-        return recommendations
+    

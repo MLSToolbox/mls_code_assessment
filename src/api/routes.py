@@ -1,6 +1,6 @@
-from flask import Flask, request
+from flask import Flask, request, g
 from flask_cors import cross_origin
-from datetime import datetime
+from datetime import datetime,timezone
 import warnings
 
 from session.session_manager import SessionManager
@@ -81,6 +81,7 @@ def create_routes(app: Flask) -> Flask:
         }
         """
         try:
+            #Search for session
             if not SessionStorage.exists(session_id, config.settings.SESSION_BASE_PATH):
                 return ResponseSerializer.error("Session not found or expired", 404)
             
@@ -94,13 +95,16 @@ def create_routes(app: Flask) -> Flask:
             
             analysis_request = AnalysisRequest.from_dict(data)
             
-            # Extract all_files parameter (default: False for backward compatibility)
+            # Get ordered analyzers from middleware (or fallback to original)
+            ordered_analyzers = getattr(g, 'ordered_analyzers', analysis_request.analyzers)
+            
             all_files = data.get('all_files', False)
             
             session = SessionManager.load_session(
                 session_id, 
                 base_path=config.settings.SESSION_BASE_PATH
             )
+
             
             metadata = session.get_metadata()
             pipeline_metadata = metadata.get("auto_detected_pipeline")
@@ -115,7 +119,7 @@ def create_routes(app: Flask) -> Flask:
             results = {}
         
             
-            if "pipeline" in analysis_request.analyzers:
+            if "pipeline" in ordered_analyzers:
                 pipeline_analyzer = AnalyzerFactory.create_analyzer(
                     "pipeline", session_id, session.local_path, shared_context
                 )
@@ -141,9 +145,10 @@ def create_routes(app: Flask) -> Flask:
                 else:
                     results["pipeline"] = pipeline_analyzer.analyze()
             
-            for analyzer_type in analysis_request.analyzers:
+            # Execute in dependency order (dependencies run first)
+            for analyzer_type in ordered_analyzers:
                 if analyzer_type == "pipeline":
-                    continue
+                    continue  # Already handled above
                 
                 
                 analyzer = AnalyzerFactory.create_analyzer(
@@ -162,8 +167,7 @@ def create_routes(app: Flask) -> Flask:
             
             return ResponseSerializer.success({
                 "session_id": session_id,
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                
+                "timestamp":datetime.now(timezone.utc).isoformat() + "Z",
                 "results": serialized_results
             })
             

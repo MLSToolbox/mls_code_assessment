@@ -40,7 +40,9 @@ class FPCAnalyzer(BaseAnalyzer):
 
         self.stage_to_phase = {}
         for phase, stages in self.config.get('phases', {}).items():
+           
             for stage in stages:
+                
                 self.stage_to_phase[stage] = phase
         
         self.ml_content_analyzer = MLContentAnalyzer(
@@ -87,6 +89,7 @@ class FPCAnalyzer(BaseAnalyzer):
         }
         
         python_files = self.context.get_python_files()
+       
         results['summary']['total_files'] = len(python_files)
         
         # List to store per-file messages (new format)
