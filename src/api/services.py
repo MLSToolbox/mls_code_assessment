@@ -9,6 +9,7 @@ from core.tree_generator import TreeGenerator
 from core.analysis_context import AnalysisContext
 from core.pipeline_overrides import AnalysisRequest
 from core.analysis_result import AnalysisResult
+from core.exceptions import SessionNotFoundError
 from metrics import get_metric_metadata
 import config.settings as config
 
@@ -78,13 +79,13 @@ class AnalysisService:
             Dictionary with analysis results and metadata
             
         Raises:
-            ValueError: If session not found or expired
+            SessionNotFoundError: If session not found or expired
             SessionError: If session invalid
-            Exception: For analysis errors
+            AnalyzerError: For analysis errors
         """
         # Validate session exists
         if not SessionStorage.exists(session_id, config.settings.SESSION_BASE_PATH):
-            raise ValueError("Session not found or expired")
+            raise SessionNotFoundError(session_id)
         
         # Load session
         session = SessionManager.load_session(

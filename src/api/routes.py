@@ -3,7 +3,6 @@ from flask_cors import cross_origin
 
 from api.serializers import ResponseSerializer
 from api.services import UploadService, AnalysisService
-from core.exceptions import SessionError
 from core.pipeline_overrides import AnalysisRequest
 import config.settings as config
 from utils.validation import validate_analysis_request, validate_zip_file
@@ -19,18 +18,9 @@ def create_routes(app: Flask) -> Flask:
         
         Returns session_id, tree_structure, and auto_detected_pipeline.
         """
-        try:
-            app_zip, error = validate_zip_file(request)
-            if error:
-                return ResponseSerializer.error(error, 400)
-            
-            result = UploadService.process_upload(app_zip)
-            return ResponseSerializer.success(result)
-            
-        except SessionError as e:
-            return ResponseSerializer.error(f"Session error: {str(e)}", 400)
-        except Exception as e:
-            return ResponseSerializer.error(f"Upload failed: {str(e)}", 500)
+        app_zip = validate_zip_file(request)
+        result = UploadService.process_upload(app_zip)
+        return ResponseSerializer.success(result)
 
     @app.route(f'{config.settings.API_PREFIX}/analyze/<session_id>', methods=['POST'])
     @cross_origin()
@@ -48,25 +38,14 @@ def create_routes(app: Flask) -> Flask:
           }
         }
         """
-        try:
-            data = request.get_json()
-            if not data:
-                return ResponseSerializer.error("Request body required", 400)
-            
-            is_valid, error_msg = validate_analysis_request(data)
-            if not is_valid:
-                return ResponseSerializer.error(error_msg, 400)
-            
-            analysis_request = AnalysisRequest.from_dict(data)
-            
-            result = AnalysisService.analyze_session(session_id, analysis_request)
-            return ResponseSerializer.success(result)
-            
-        except ValueError as e:
-            return ResponseSerializer.error(str(e), 404)
-        except SessionError as e:
-            return ResponseSerializer.error(f"Session error: {str(e)}", 400)
-        except Exception as e:
-            return ResponseSerializer.error(f"Analysis failed: {str(e)}", 500)
+        data = request.get_json()
+        if not data:
+            return ResponseSerializer.error("Request body required", 400)
+        
+        validate_analysis_request(data)
+        analysis_request = AnalysisRequest.from_dict(data)
+        
+        result = AnalysisService.analyze_session(session_id, analysis_request)
+        return ResponseSerializer.success(result)
 
     return app
