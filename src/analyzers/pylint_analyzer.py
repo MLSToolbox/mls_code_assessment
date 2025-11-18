@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Any
 
 from analyzers.base_analyzer import BaseAnalyzer
-from core.models.analysis_result import AnalysisResult
+from core.analysis_result import AnalysisResult
 from core.exceptions import AnalyzerError
 from config.settings import settings
 

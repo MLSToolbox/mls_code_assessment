@@ -3,7 +3,7 @@ import os
 import json
 from typing import Dict, List, Set, Tuple, Optional, Any
 
-from core.models.analysis_result import AnalysisResult
+from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 
 

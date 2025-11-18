@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Any
 
 from session.file_handler import FileHandler
 from analyzers.factory import AnalyzerFactory
-from core.models.analysis_result import AnalysisResult
+from core.analysis_result import AnalysisResult
 from core.exceptions import SessionError
 from session.session_storage import SessionStorage
 from core.analysis_context import AnalysisContext

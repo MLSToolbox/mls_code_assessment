@@ -4,8 +4,8 @@ import json
 from typing import Dict, List, Optional, Tuple, Set
 from collections import defaultdict
 
-from core.models.analysis_result import AnalysisResult
-from core.models.pipeline_overrides import PipelineOverrides
+from core.analysis_result import AnalysisResult
+from core.pipeline_overrides import PipelineOverrides
 from analyzers.base_analyzer import BaseAnalyzer
 
 

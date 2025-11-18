@@ -7,9 +7,9 @@ from session.session_storage import SessionStorage
 from analyzers.factory import AnalyzerFactory
 from core.tree_generator import TreeGenerator
 from core.analysis_context import AnalysisContext
-from core.models.pipeline_overrides import AnalysisRequest
-from core.models.analysis_result import AnalysisResult
-from core.metrics import get_metric_metadata
+from core.pipeline_overrides import AnalysisRequest
+from core.analysis_result import AnalysisResult
+from metrics import get_metric_metadata
 import config.settings as config
 
 

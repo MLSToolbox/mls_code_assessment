@@ -4,7 +4,7 @@ from flask_cors import cross_origin
 from api.serializers import ResponseSerializer
 from api.services import UploadService, AnalysisService
 from core.exceptions import SessionError
-from core.models.pipeline_overrides import AnalysisRequest
+from core.pipeline_overrides import AnalysisRequest
 import config.settings as config
 from utils.validation import validate_analysis_request, validate_zip_file
 

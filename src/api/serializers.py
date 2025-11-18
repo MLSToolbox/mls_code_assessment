@@ -1,6 +1,6 @@
 from flask import jsonify
 from typing import Any, Dict
-from core.models.analysis_result import AnalysisResult
+from core.analysis_result import AnalysisResult
 
 
 class ResponseSerializer:

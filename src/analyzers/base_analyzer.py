@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List, Union
-from core.models.analysis_result import AnalysisResult
+from core.analysis_result import AnalysisResult
 from core.analysis_context import AnalysisContext
 from core.exceptions import AnalyzerError
-from core.metrics import get_metric_metadata
+from metrics import get_metric_metadata
 import os
 
 

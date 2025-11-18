@@ -1,4 +1,4 @@
-from core.metrics.metadata import MetricMetadata
+from metrics.metadata import MetricMetadata
 
 
 METRICS_REGISTRY = {
