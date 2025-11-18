@@ -7,7 +7,7 @@ from session.session_storage import SessionStorage
 from analyzers.factory import AnalyzerFactory
 from core.tree_generator import TreeGenerator
 from core.analysis_context import AnalysisContext
-from core.pipeline_overrides import AnalysisRequest
+from analyzers.pipeline.pipeline_overrides import AnalysisRequest
 from core.analysis_result import AnalysisResult
 from core.exceptions import SessionNotFoundError
 from metrics import get_metric_metadata

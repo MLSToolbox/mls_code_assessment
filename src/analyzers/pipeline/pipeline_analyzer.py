@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple, Set
 from collections import defaultdict
 
 from core.analysis_result import AnalysisResult
-from core.pipeline_overrides import PipelineOverrides
+from analyzers.pipeline.pipeline_overrides import PipelineOverrides
 from analyzers.base_analyzer import BaseAnalyzer
 
 
@@ -29,7 +29,7 @@ class PipelineAnalyzer(BaseAnalyzer):
             # Default configuration
             config_file = os.path.join(
                 os.path.dirname(__file__), 
-                "../config/pipeline_stages.json"
+                "pipeline_stages.json"
             )
             if os.path.exists(config_file):
                 with open(config_file, 'r') as f:

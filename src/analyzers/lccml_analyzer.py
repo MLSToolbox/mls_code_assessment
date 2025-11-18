@@ -21,8 +21,8 @@ class LCCMLAnalyzer(BaseAnalyzer):
         super().__init__(session_id, local_path, context)
         
         pipeline_stages_json_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'config',
+            os.path.dirname(__file__),
+            'pipeline',
             'pipeline_stages.json'
         )
         
