@@ -235,6 +235,10 @@ class LCCMLAnalyzer(BaseAnalyzer):
         """
         Extract all methods (functions and class methods) from AST.
         
+        Handles both OOP and functional paradigms:
+        - Class methods: ClassName.method_name
+        - Module-level functions: function_name
+        
         Returns:
             Dict mapping method name to AST node
         """
@@ -253,6 +257,7 @@ class LCCMLAnalyzer(BaseAnalyzer):
                 if self.current_class:
                     method_name = f"{self.current_class}.{node.name}"
                 else:
+                    # Module-level function
                     method_name = node.name
                 self.methods[method_name] = node
                 self.generic_visit(node)
@@ -260,6 +265,40 @@ class LCCMLAnalyzer(BaseAnalyzer):
         visitor = MethodVisitor()
         visitor.visit(tree)
         return visitor.methods
+    
+    def _extract_global_variables(self, tree: ast.Module) -> Set[str]:
+        """
+        Extract module-level global variables that could be shared between functions.
+        
+        Detects:
+        - Module-level assignments (e.g., DATA = load_data())
+        - Constants (e.g., CONFIG = {...})
+        - Global declarations
+        
+        These variables can be shared between module-level functions,
+        providing cohesion similar to self.x in classes.
+        
+        Args:
+            tree: AST of the module
+            
+        Returns:
+            Set of global variable names
+        """
+        globals_vars = set()
+        
+        for node in ast.iter_child_nodes(tree):
+            # Direct module-level assignments
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        globals_vars.add(target.id)
+            
+            # Annotated assignments (e.g., DATA: pd.DataFrame = ...)
+            elif isinstance(node, ast.AnnAssign):
+                if isinstance(node.target, ast.Name):
+                    globals_vars.add(node.target.id)
+        
+        return globals_vars
     
     def _analyze_connections(
         self, 
@@ -283,7 +322,13 @@ class LCCMLAnalyzer(BaseAnalyzer):
                 'calls': self._get_method_calls(method_node, methods)
             }
         
-        # Find connected pairs
+        # Build adjacency graph for direct connections
+        graph = self._build_adjacency_graph(method_usage, list(methods.keys()))
+        
+        # Apply DFS to find all reachable methods (transitive connections)
+        reachable = self._get_reachable_methods(graph, list(methods.keys()))
+        
+        # Find connected pairs using reachability
         connections = {
             'by_variables': set(),
             'by_files': set(),
@@ -296,39 +341,298 @@ class LCCMLAnalyzer(BaseAnalyzer):
             for method_b in method_names[i+1:]:
                 pair = (method_a, method_b)
                 
-                # Check variable sharing
-                if method_usage[method_a]['variables'] & method_usage[method_b]['variables']:
-                    connections['by_variables'].add(pair)
-                
-                # Check file sharing
-                if method_usage[method_a]['files'] & method_usage[method_b]['files']:
-                    connections['by_files'].add(pair)
-                
-                # Check ML function sharing
-                if method_usage[method_a]['ml_functions'] & method_usage[method_b]['ml_functions']:
-                    connections['by_ml_functions'].add(pair)
-                
-                # Check method calls (bidirectional)
-                if (method_b in method_usage[method_a]['calls'] or 
-                    method_a in method_usage[method_b]['calls']):
-                    connections['by_method_calls'].add(pair)
+                # Check if methods are reachable (directly or transitively)
+                if method_b in reachable[method_a]:
+                    # Determine which type of connection exists
+                    # Check variable sharing
+                    if method_usage[method_a]['variables'] & method_usage[method_b]['variables']:
+                        connections['by_variables'].add(pair)
+                    
+                    # Check file sharing
+                    if method_usage[method_a]['files'] & method_usage[method_b]['files']:
+                        connections['by_files'].add(pair)
+                    
+                    # Check ML function sharing
+                    if method_usage[method_a]['ml_functions'] & method_usage[method_b]['ml_functions']:
+                        connections['by_ml_functions'].add(pair)
+                    
+                    # Check method calls (bidirectional)
+                    if (method_b in method_usage[method_a]['calls'] or 
+                        method_a in method_usage[method_b]['calls']):
+                        connections['by_method_calls'].add(pair)
         
         return connections
     
+    def _build_adjacency_graph(
+        self, 
+        method_usage: Dict[str, Dict[str, Set]],
+        method_names: List[str]
+    ) -> Dict[str, Set[str]]:
+        """
+        Build adjacency graph of direct connections between methods.
+        
+        Two methods are directly connected if they share:
+        - Variables (especially self.x)
+        - Files
+        - ML library functions
+        - Method calls
+        
+        Args:
+            method_usage: Dict mapping method names to their usage data
+            method_names: List of all method names
+            
+        Returns:
+            Adjacency graph: Dict[method_name, Set[connected_method_names]]
+        """
+        graph = {method: set() for method in method_names}
+        
+        for i, method_a in enumerate(method_names):
+            for method_b in method_names[i+1:]:
+                # Check if methods share any resource
+                shares_variables = bool(
+                    method_usage[method_a]['variables'] & method_usage[method_b]['variables']
+                )
+                shares_files = bool(
+                    method_usage[method_a]['files'] & method_usage[method_b]['files']
+                )
+                shares_ml_functions = bool(
+                    method_usage[method_a]['ml_functions'] & method_usage[method_b]['ml_functions']
+                )
+                calls_each_other = (
+                    method_b in method_usage[method_a]['calls'] or
+                    method_a in method_usage[method_b]['calls']
+                )
+                
+                # If any connection exists, add edge (bidirectional)
+                if shares_variables or shares_files or shares_ml_functions or calls_each_other:
+                    graph[method_a].add(method_b)
+                    graph[method_b].add(method_a)
+        
+        return graph
+    
+    def _get_reachable_methods(
+        self,
+        graph: Dict[str, Set[str]],
+        method_names: List[str]
+    ) -> Dict[str, Set[str]]:
+        """
+        Find all reachable methods from each method using DFS.
+        
+        This implements transitive closure: if A connects to B and B connects to C,
+        then A is considered connected to C even without direct connection.
+        
+        Args:
+            graph: Adjacency graph of direct connections
+            method_names: List of all method names
+            
+        Returns:
+            Dict mapping each method to set of all reachable methods (including itself)
+        """
+        def dfs(node: str, visited: Set[str]) -> Set[str]:
+            """Depth-first search to find all reachable nodes."""
+            visited.add(node)
+            reachable = {node}
+            
+            for neighbor in graph[node]:
+                if neighbor not in visited:
+                    reachable.update(dfs(neighbor, visited))
+            
+            return reachable
+        
+        reachable = {}
+        for method in method_names:
+            visited = set()
+            reachable[method] = dfs(method, visited)
+        
+        return reachable
+    
     def _get_variables_accessed(self, method_node: ast.FunctionDef) -> Set[str]:
-        """Extract all variables accessed (read or written) in a method."""
+        """
+        Extract shared variables accessed in a method.
+        
+        Detects two types of shared variables:
+        1. Instance variables (self.x) - for OOP code
+        2. Module-level global variables - for functional/script-style code
+        
+        This handles both paradigms:
+        - OOP: class with self.data shared between methods
+        - Functional: module-level DATA variable shared between functions
+        
+        Examples of what IS detected:
+            - self.data (instance variable)
+            - self.model (instance variable)
+            - GLOBAL_VAR (if defined at module level and used in function)
+            
+        Examples of what is NOT detected:
+            - local_var (local variable)
+            - param (function parameter)
+            - np.array (module import)
+        
+        Args:
+            method_node: AST node of the method/function
+            
+        Returns:
+            Set of variable names (e.g., {'self.data', 'DATASET', 'CONFIG'})
+        """
         variables = set()
         
+        # Get function parameters to exclude them
+        params = {arg.arg for arg in method_node.args.args}
+        
         for node in ast.walk(method_node):
-            if isinstance(node, ast.Name):
-                variables.add(node.id)
-            elif isinstance(node, ast.Attribute):
+            if isinstance(node, ast.Attribute):
                 # Get full attribute path (e.g., self.x)
                 attr_path = self._get_attribute_path(node)
-                if attr_path:
+                # Include if it starts with 'self.' (instance variables)
+                if attr_path and attr_path.startswith('self.'):
                     variables.add(attr_path)
+            
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Load, ast.Store)):
+                # Check if it's a global variable (not a parameter or local)
+                var_name = node.id
+                
+                # Skip if it's a parameter
+                if var_name in params:
+                    continue
+                
+                # Skip if it's 'self'
+                if var_name == 'self':
+                    continue
+                
+                # Check if it looks like a global/module-level variable
+                # Heuristic: UPPERCASE or starts with underscore (common conventions)
+                # OR it's being loaded (read) which suggests it might be global
+                if isinstance(node.ctx, ast.Load):
+                    # Only add if it's likely a global (not a builtin or import)
+                    if self._is_likely_global_variable(var_name):
+                        variables.add(f"global.{var_name}")
         
         return variables
+    
+    def _is_likely_global_variable(self, var_name: str) -> bool:
+        """
+        Enhanced heuristic to determine if a variable name is likely a module-level global.
+        
+        Excludes:
+        - Python builtins (list, dict, str, etc.)
+        - Common imports (pd, np, os, etc.)
+        - Common local variable names (result, temp, i, j, etc.)
+        - Very short names (x, y, i) unless they're common ML variables
+        
+        Includes:
+        - UPPERCASE names (DATA, CONFIG, MODEL_PATH)
+        - UPPER_SNAKE_CASE (TRAIN_DATA, MAX_EPOCHS)
+        - Names starting with underscore (_cache, _config)
+        - Common ML global patterns (dataset, model, scaler, etc.)
+        - MixedCase starting with uppercase (DataLoader, ModelConfig)
+        
+        Args:
+            var_name: Variable name to check
+            
+        Returns:
+            True if likely a global variable
+        """
+        # Python builtins to exclude
+        builtins = {
+            'abs', 'all', 'any', 'ascii', 'bin', 'bool', 'bytearray', 'bytes',
+            'callable', 'chr', 'classmethod', 'compile', 'complex', 'delattr',
+            'dict', 'dir', 'divmod', 'enumerate', 'eval', 'exec', 'filter',
+            'float', 'format', 'frozenset', 'getattr', 'globals', 'hasattr',
+            'hash', 'help', 'hex', 'id', 'input', 'int', 'isinstance',
+            'issubclass', 'iter', 'len', 'list', 'locals', 'map', 'max',
+            'memoryview', 'min', 'next', 'object', 'oct', 'open', 'ord',
+            'pow', 'print', 'property', 'range', 'repr', 'reversed', 'round',
+            'set', 'setattr', 'slice', 'sorted', 'staticmethod', 'str', 'sum',
+            'super', 'tuple', 'type', 'vars', 'zip', '__import__'
+        }
+        
+        # Common library aliases to exclude
+        common_imports = {
+            'np', 'pd', 'plt', 'sns', 'tf', 'torch', 'os', 'sys', 'json',
+            'cv2', 'sk', 'sklearn', 'scipy', 'sp', 'math', 're', 'time',
+            'datetime', 'collections', 'itertools', 'functools', 'operator',
+            'pathlib', 'logging', 'warnings', 'pickle', 'joblib'
+        }
+        
+        # Common local variable names to exclude
+        common_locals = {
+            'result', 'results', 'output', 'temp', 'tmp', 'value', 'values',
+            'item', 'items', 'elem', 'element', 'row', 'col', 'idx', 'index',
+            'i', 'j', 'k', 'n', 'm', 'key', 'val', 'arg', 'args', 'kwargs',
+            'self', 'cls', 'obj', 'func', 'fn', 'callback', 'handler'
+        }
+        
+        # Common ML global variable names/patterns
+        common_ml_globals = {
+            # Data
+            'data', 'dataset', 'datasets', 'df', 'dataframe',
+            'X', 'Y', 'y', 'X_train', 'X_test', 'X_val',
+            'y_train', 'y_test', 'y_val', 'train_data', 'test_data', 'val_data',
+            'train_set', 'test_set', 'val_set', 'validation_data',
+            # Models
+            'model', 'models', 'net', 'network', 'estimator',
+            'classifier', 'regressor', 'predictor',
+            # Preprocessing
+            'scaler', 'encoder', 'tokenizer', 'vectorizer',
+            'transformer', 'preprocessor', 'normalizer',
+            # Configuration
+            'config', 'cfg', 'params', 'hyperparams', 'settings',
+            'options', 'args', 'arguments',
+            # Paths
+            'data_path', 'model_path', 'output_path', 'input_path',
+            # Other
+            'features', 'labels', 'targets', 'predictions',
+            'weights', 'bias', 'embeddings'
+        }
+        
+        if var_name in builtins or var_name in common_imports:
+            return False
+        
+        if var_name in common_locals:
+            return False
+        
+        # Check if it's a common ML global
+        if var_name in common_ml_globals:
+            return True
+        
+        # UPPERCASE (including UPPER_SNAKE_CASE like TRAIN_DATA)
+        # Check if all alphabetic characters are uppercase
+        if var_name.replace('_', '').isalpha() and var_name.replace('_', '').isupper():
+            return True
+        
+        # Starts with underscore (module-private variables)
+        if var_name.startswith('_'):
+            return True
+        
+        # MixedCase starting with uppercase (e.g., DataLoader, ModelConfig)
+        if var_name[0].isupper() and not var_name.isupper():
+            return True
+        
+        # Pattern matching for common ML naming conventions
+        # e.g., train_dataset, test_model, validation_scaler
+        ml_prefixes = {'train', 'test', 'val', 'validation', 'dev'}
+        ml_suffixes = {
+            'data', 'dataset', 'set', 'loader', 'model', 'scaler',
+            'encoder', 'tokenizer', 'config', 'params', 'path'
+        }
+        
+        if '_' in var_name:
+            parts = var_name.split('_')
+            if len(parts) >= 2:
+                # Check prefix_suffix pattern (e.g., train_data)
+                if parts[0] in ml_prefixes and parts[-1] in ml_suffixes:
+                    return True
+                # Check suffix pattern (e.g., model_config, data_path)
+                if parts[-1] in ml_suffixes and len(var_name) > 6:
+                    return True
+        
+        # Very short names (≤2 chars) are likely locals unless already caught above
+        if len(var_name) <= 2:
+            return False
+        
+        # Conservative: longer lowercase names without ML patterns are excluded
+        # to avoid false positives
+        return False
     
     def _get_attribute_path(self, node: ast.Attribute) -> str:
         """Get full attribute path (e.g., 'self.x' or 'obj.attr')."""
