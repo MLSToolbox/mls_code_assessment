@@ -24,9 +24,20 @@ class PyLintAnalyzer(BaseAnalyzer):
         try:
             json_output = self._run_pylint_analysis(target_path)
             
+            # Convert pylint messages to standard format
+            messages = []
+            for msg in json_output.get("messages", []):
+                messages.append({
+                    'file': msg.get('path', 'unknown'),
+                    'diagnosis': f"[{msg.get('symbol', 'unknown')}] Line {msg.get('line', 0)}: {msg.get('message', '')}",
+                    'recommendation': f"Fix this {msg.get('type', 'issue')} to improve code quality.",
+                    'severity': 'high' if msg.get('type') in ['error', 'fatal'] else 'medium' if msg.get('type') == 'warning' else 'low',
+                    'rule_id': msg.get('message-id', '')
+                })
+            
             return self._create_result(
                 score=json_output["statistics"]["score"],
-                messages=json_output["statistics"]["messageTypeCount"],
+                messages=messages,
                 module_count=json_output["statistics"]["modulesLinted"],
                 details=self._extract_details(json_output)
             )

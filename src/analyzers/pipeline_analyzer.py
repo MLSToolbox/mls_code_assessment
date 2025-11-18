@@ -11,8 +11,8 @@ from analyzers.base_analyzer import BaseAnalyzer
 
 class PipelineAnalyzer(BaseAnalyzer):
     
-    def __init__(self, session_id: str, local_path: str, config_path: Optional[str] = None):
-        super().__init__(session_id, local_path)
+    def __init__(self, session_id: str, local_path: str, context=None, config_path: Optional[str] = None):
+        super().__init__(session_id, local_path, context)
         
         # Required stages for a valid pipeline
         self.required_stages = {

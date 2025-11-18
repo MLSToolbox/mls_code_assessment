@@ -20,7 +20,7 @@ def validate_analysis_request(data: Dict) -> Tuple[bool, str]:
     if len(data['analyzers']) == 0:
         return False, "At least one analyzer must be specified"
     
-    valid_analyzers = {'pylint', 'radon_cc', 'radon_mi', 'pipeline', 'fpc', 'file_structure'}
+    valid_analyzers = {'pylint', 'radon_cc', 'radon_mi', 'pipeline', 'fpc', 'file_structure', 'lccml'}
     for analyzer in data['analyzers']:
         if analyzer not in valid_analyzers:
             return False, f"Invalid analyzer type: {analyzer}. Valid types: {valid_analyzers}"
@@ -54,8 +54,8 @@ def validate_pipeline_overrides(overrides: Dict) -> Tuple[bool, str]:
         
         valid_stages = {
             "data_collection",
-            "data_cleaning",        # Optional
-            "feature_engineering",  # Optional
+            "data_cleaning", 
+            "feature_engineering",
             "model_training",
             "model_evaluation"
         }

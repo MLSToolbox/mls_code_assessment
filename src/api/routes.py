@@ -131,7 +131,7 @@ def create_routes(app: Flask) -> Flask:
                     results["pipeline"] = AnalysisResult(
                         analyzer_id="pipeline_detection",
                         score=10.0 if modified["is_valid_pipeline"] else 0.0,
-                        message_count={},
+                        messages={},
                         module_count=modified.get("files_analyzed", 0),
                         metric_metadata=get_metric_metadata("pipeline_detection"),
                         details=modified

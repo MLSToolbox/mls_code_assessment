@@ -52,7 +52,7 @@ METRICS_REGISTRY = {
         formula=(
             "Score = 10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10)"
         ),
-        ideal_range={"min": -float('inf'), "max": 10.0, "optimal": ">8.0", "acceptable": "7.0-8.0", "warning": "<7.0"},
+        ideal_range={"min": None, "max": 10.0, "optimal": ">8.0", "acceptable": "7.0-8.0", "warning": "<7.0"},
         interpretation={
             "9.0-10.0": "Excellent - very few issues detected",
             "8.0-8.9": "Good - minor improvements possible",
@@ -142,6 +142,39 @@ METRICS_REGISTRY = {
         },
         references=["https://github.com/MLS-Toobox/mls_code_generator"],
         category="detection"
+    ),
+    
+    "lccml": MetricMetadata(
+        metric_id="lccml",
+        name="Loose Class Cohesion Modified for ML",
+        description=(
+            "Measures module cohesion specifically for ML code by analyzing connectivity between "
+            "methods based on shared access to variables, data/model files, ML library functions, "
+            "and direct method calls. Extended version of LCOM4 adapted for ML pipelines. "
+            "Operates at module level (not class level) to handle both OO and script-style code."
+        ),
+        formula=(
+            "LCCML = (Mv ∪ Mf ∪ Ml ∪ Mc) / (n(n-1)/2), where: "
+            "n = number of methods in file, "
+            "Mv = pairs connected by shared variables, "
+            "Mf = pairs connected by shared data/model files, "
+            "Ml = pairs connected by shared ML library functions, "
+            "Mc = pairs connected by direct method calls (A calls B or B calls A)"
+        ),
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.7", "acceptable": "0.5-0.7", "warning": "<0.5"},
+        interpretation={
+            "0.8-1.0": "Excellent - highly cohesive module, methods work together well",
+            "0.6-0.79": "Good - reasonable cohesion, minor improvements possible",
+            "0.4-0.59": "Moderate - consider refactoring to improve method connectivity",
+            "0.2-0.39": "Low - module likely doing too many unrelated things",
+            "0.0-0.19": "Very Low - module should be split into separate files"
+        },
+        references=[
+            "Loose Class Cohesion (LCC) - Bieman & Kang, 1995",
+            "LCOM4 - Hitz & Montazeri, 1995",
+            "Adapted for ML pipelines - considers data files and ML library usage"
+        ],
+        category="cohesion"
     ),
 }
 
