@@ -1,11 +1,13 @@
 from flask import Flask, request
 from flask_cors import cross_origin
+from pydantic import ValidationError as PydanticValidationError
 
 from api.serializers import ResponseSerializer
 from api.services import UploadService, AnalysisService
 from core.pipeline_overrides import AnalysisRequest
+from core.exceptions import ValidationError
 import config.settings as config
-from utils.validation import validate_analysis_request, validate_zip_file
+from utils.validation import validate_zip_file
 
 
 def create_routes(app: Flask) -> Flask:
@@ -42,8 +44,14 @@ def create_routes(app: Flask) -> Flask:
         if not data:
             return ResponseSerializer.error("Request body required", 400)
         
-        validate_analysis_request(data)
-        analysis_request = AnalysisRequest.from_dict(data)
+        try:
+            analysis_request = AnalysisRequest.model_validate(data)
+        except PydanticValidationError as e:
+            # Convert Pydantic validation errors to our ValidationError
+            errors = e.errors()
+            first_error = errors[0]
+            field = ".".join(str(loc) for loc in first_error['loc'])
+            raise ValidationError(first_error['msg'], field=field)
         
         result = AnalysisService.analyze_session(session_id, analysis_request)
         return ResponseSerializer.success(result)
