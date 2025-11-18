@@ -4,10 +4,10 @@ from pydantic import ValidationError as PydanticValidationError
 
 from api.serializers import ResponseSerializer
 from api.services import UploadService, AnalysisService
+from api.validation import validate_zip_file
 from analyzers.pipeline.pipeline_overrides import AnalysisRequest
 from core.exceptions import ValidationError
 import config.settings as config
-from utils.validation import validate_zip_file
 
 
 def create_routes(app: Flask) -> Flask:
