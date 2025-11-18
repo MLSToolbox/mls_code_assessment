@@ -39,9 +39,11 @@ class AnalysisRequest:
     Attributes:
         analyzers: List of analyzer types to execute
         pipeline_overrides: Optional pipeline overrides
+        all_files: Whether to analyze all files or only ML-related files
     """
     analyzers: List[str]
     pipeline_overrides: Optional[PipelineOverrides] = None
+    all_files: bool = False
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'AnalysisRequest':
@@ -62,5 +64,6 @@ class AnalysisRequest:
         
         return cls(
             analyzers=data.get('analyzers', []),
-            pipeline_overrides=overrides
+            pipeline_overrides=overrides,
+            all_files=data.get('all_files', False)
         )
