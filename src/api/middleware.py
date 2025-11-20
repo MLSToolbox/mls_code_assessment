@@ -4,6 +4,8 @@ import logging
 import time
 import config.settings as config
 
+
+
 def setup_middleware(app: Flask) -> Flask:
     
     CORS(app, supports_credentials=True, origins=['*'])
@@ -13,6 +15,8 @@ def setup_middleware(app: Flask) -> Flask:
     def log_request():
         g.start_time = time.time()
         logging.info(f"Request: {request.method} {request.path}")
+    
+    
     
     @app.after_request
     def log_response(response):

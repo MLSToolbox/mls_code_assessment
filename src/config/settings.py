@@ -5,6 +5,7 @@ from typing import Literal, Set
 class Settings:
     """Application configuration settings."""
     
+    
     # Server settings
     HOST: str = os.getenv('HOST', '0.0.0.0')
     PORT: int = int(os.getenv('PORT', '5060'))
@@ -20,6 +21,7 @@ class Settings:
         "radon_mi",
         "pipeline",
         "fpc",
+        "pfp",
         "file_structure",
         "lccml",
         "ml_content",
@@ -87,9 +89,12 @@ AnalyzerType = Literal[
     "radon_mi",
     "pipeline",
     "fpc",
+    "pfp",
     "file_structure",
     "lccml",
-    "ml_content"
+    "ml_content",
+    "ldsc",
+    "ifc_m"
 ]
 
 PipelineStage = Literal[

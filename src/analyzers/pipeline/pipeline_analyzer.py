@@ -34,7 +34,10 @@ class PipelineAnalyzer(BaseAnalyzer):
             if os.path.exists(config_file):
                 with open(config_file, 'r') as f:
                     self.config = json.load(f)
+
             else:
+                
+                
                 self.config = self._default_config()
     
     @property

@@ -47,7 +47,8 @@ if __name__ == '__main__':
         app.run(
             host=settings.HOST,
             port=settings.PORT,
-            debug=True
+            debug=True,
+            
         )
     else:
         serve(app, host=settings.HOST, port=settings.PORT)

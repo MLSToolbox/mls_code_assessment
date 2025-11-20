@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, g
 from flask_cors import cross_origin
 from pydantic import ValidationError as PydanticValidationError
 
@@ -41,6 +41,7 @@ def create_routes(app: Flask) -> Flask:
         }
         """
         data = request.get_json()
+        
         if not data:
             return ResponseSerializer.error("Request body required", 400)
         
