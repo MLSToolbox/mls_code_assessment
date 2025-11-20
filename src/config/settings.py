@@ -26,6 +26,7 @@ class Settings:
         "lccml",
         "ml_content",
         "ldsc",
+        "pdsc",
         "ifc_m"
     }
     
