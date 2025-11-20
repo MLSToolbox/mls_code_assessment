@@ -97,7 +97,18 @@ class AnalysisService:
         metadata = session.get_metadata()
         pipeline_metadata = metadata.get("auto_detected_pipeline")
         
-        # Create shared analysis context
+        # Apply pipeline overrides FIRST if they exist
+        # This ensures all analyzers use the updated metadata
+        if analysis_request.pipeline_overrides:
+            pipeline_analyzer = AnalyzerFactory.create_analyzer(
+                "pipeline", session_id, session.local_path, None
+            )
+            pipeline_metadata = pipeline_analyzer.apply_overrides(
+                auto_detected=pipeline_metadata,
+                overrides=analysis_request.pipeline_overrides
+            )
+        
+        # Create shared analysis context with (potentially overridden) pipeline metadata
         shared_context = AnalysisContext(
             session_id, 
             session.local_path,
@@ -107,26 +118,24 @@ class AnalysisService:
         
         results = {}
         
-        # Handle pipeline analysis with overrides
-        if "pipeline" in analysis_request.analyzers:
-            results["pipeline"] = AnalysisService._analyze_pipeline(
-                session_id=session_id,
-                local_path=session.local_path,
-                shared_context=shared_context,
-                session=session,
-                overrides=analysis_request.pipeline_overrides
-            )
-        
-        # Run other analyzers
+        # Run all analyzers (including pipeline if requested)
         for analyzer_type in analysis_request.analyzers:
             if analyzer_type == "pipeline":
-                continue
-            
-            analyzer = AnalyzerFactory.create_analyzer(
-                analyzer_type, session_id, session.local_path, shared_context
-            )
-            result = analyzer.analyze()
-            results[analyzer_type] = result
+                # For pipeline, just create the result from the metadata we already have
+                results["pipeline"] = AnalysisResult(
+                    analyzer_id="pipeline_detection",
+                    score=10.0 if pipeline_metadata["is_valid_pipeline"] else 0.0,
+                    messages={},
+                    module_count=pipeline_metadata.get("files_analyzed", 0),
+                    metric_metadata=get_metric_metadata("pipeline_detection"),
+                    details=pipeline_metadata
+                )
+            else:
+                analyzer = AnalyzerFactory.create_analyzer(
+                    analyzer_type, session_id, session.local_path, shared_context
+                )
+                result = analyzer.analyze()
+                results[analyzer_type] = result
         
         # Serialize results
         serialized_results = {
@@ -142,48 +151,3 @@ class AnalysisService:
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "results": serialized_results
         }
-    
-    @staticmethod
-    def _analyze_pipeline(
-        session_id: str,
-        local_path: str,
-        shared_context: AnalysisContext,
-        session: SessionManager,
-        overrides: Dict = None
-    ) -> AnalysisResult:
-        """
-        Analyze pipeline with optional overrides.
-        
-        Args:
-            session_id: Session identifier
-            local_path: Path to code files
-            shared_context: Shared analysis context
-            session: Session manager instance
-            overrides: Optional pipeline overrides
-            
-        Returns:
-            Pipeline analysis result
-        """
-        pipeline_analyzer = AnalyzerFactory.create_analyzer(
-            "pipeline", session_id, local_path, shared_context
-        )
-        
-        if overrides:
-            metadata = session.get_metadata()
-            auto_detected = metadata["auto_detected_pipeline"]
-            
-            modified = pipeline_analyzer.apply_overrides(
-                auto_detected=auto_detected,
-                overrides=overrides
-            )
-            
-            return AnalysisResult(
-                analyzer_id="pipeline_detection",
-                score=10.0 if modified["is_valid_pipeline"] else 0.0,
-                messages={},
-                module_count=modified.get("files_analyzed", 0),
-                metric_metadata=get_metric_metadata("pipeline_detection"),
-                details=modified
-            )
-        else:
-            return pipeline_analyzer.analyze()

@@ -253,9 +253,14 @@ class FPCAnalyzer(BaseAnalyzer):
         detected_stages = pipeline_metadata.get("detected_stages", {})
         file_stages = set()
         
+        # Normalize file_path (remove leading slash if present for comparison)
+        normalized_file_path = file_path.lstrip('/')
+        
         for stage_name, file_list in detected_stages.items():
             for file_info in file_list:
-                if file_info["file"] == file_path:
+                # Normalize the file path from metadata as well
+                metadata_file_path = file_info["file"].lstrip('/')
+                if metadata_file_path == normalized_file_path:
                     file_stages.add(stage_name)
         
         return file_stages
