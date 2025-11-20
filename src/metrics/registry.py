@@ -176,6 +176,29 @@ METRICS_REGISTRY = {
         ],
         category="cohesion"
     ),
+
+    "ldsc": MetricMetadata(
+        metric_id="ldsc",
+        name="Linked Data Structure Cohesion",
+        description=(
+            "Measures how much functions within a module share data or structures. "
+            "High values indicate that functions are tightly coupled through shared data."
+        ),
+        formula=(
+            "LDSC = (2 * sum(P_ij)) / (n * (n-1)), where P_ij = 1 if functions i and j "
+            "share at least one significant variable or data structure."
+        ),
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
+        interpretation={
+            "0.8-1.0": "Excellent - Maximum structural cohesion",
+            "0.6-0.79": "Good - High data sharing",
+            "0.4-0.59": "Moderate - Some data sharing",
+            "0.2-0.39": "Low - Little data sharing",
+            "0.0-0.19": "Very Low - Minimal structural cohesion"
+        },
+        references=["Internal Definition"],
+        category="cohesion"
+    ),
 }
 
 
