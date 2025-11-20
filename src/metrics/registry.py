@@ -199,6 +199,29 @@ METRICS_REGISTRY = {
         references=["Internal Definition"],
         category="cohesion"
     ),
+
+    "ifc_m": MetricMetadata(
+        metric_id="ifc_m",
+        name="Information Flow Cohesion - Modified",
+        description=(
+            "Measures functional connection between functions via information flow. "
+            "Considers direct method invocations and data flow (producer-consumer relationships)."
+        ),
+        formula=(
+            "IFC-M = (2 * sum(F_ij)) / (n * (n-1)), where F_ij = 1 if function i calls j "
+            "OR i consumes data produced by j."
+        ),
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.7", "acceptable": "0.5-0.7", "warning": "<0.5"},
+        interpretation={
+            "0.8-1.0": "Excellent - High functional cohesion",
+            "0.6-0.79": "Good - Functions are well connected",
+            "0.4-0.59": "Moderate - Some functional connections",
+            "0.2-0.39": "Low - Few functional connections",
+            "0.0-0.19": "Very Low - Functions operate independently"
+        },
+        references=["Internal Definition"],
+        category="cohesion"
+    ),
 }
 
 

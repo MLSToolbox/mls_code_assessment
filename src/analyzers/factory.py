@@ -23,6 +23,7 @@ class AnalyzerFactory:
             from analyzers.ml_content import MLContentAnalyzer
             from analyzers.lccml_analyzer import LCCMLAnalyzer
             from analyzers.ldsc_analyzer import LDSCAnalyzer
+            from analyzers.ifc_m_analyzer import IFCMAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
@@ -34,6 +35,7 @@ class AnalyzerFactory:
                 "ml_content": MLContentAnalyzer,
                 "lccml": LCCMLAnalyzer,
                 "ldsc": LDSCAnalyzer,
+                "ifc_m": IFCMAnalyzer,
             }
         return cls._analyzers
     

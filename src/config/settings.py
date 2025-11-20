@@ -23,7 +23,8 @@ class Settings:
         "file_structure",
         "lccml",
         "ml_content",
-        "ldsc"
+        "ldsc",
+        "ifc_m"
     }
     
     # Valid pipeline stages
