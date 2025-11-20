@@ -259,6 +259,28 @@ METRICS_REGISTRY = {
         
     ),
 
+    "pdsc": MetricMetadata(
+        metric_id="pdsc",
+        name="Package Data Structure Cohesion",
+        description=(
+            "Measures the structural sharing of data or models between modules of the same package. "
+            "High values indicate that modules within a package are tightly coupled through shared resources."
+        ),
+        formula=(
+            "PDSC(P) = (2 * sum(Q_ij)) / (m * (m - 1)), where Q_ij = 1 if modules i and j "
+            "access or modify the same data structures or resources."
+        ),
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
+        interpretation={
+            "0.8-1.0": "Excellent - Maximum structural cohesion",
+            "0.6-0.79": "Good - High resource sharing",
+            "0.4-0.59": "Moderate - Some resource sharing",
+            "0.2-0.39": "Low - Little resource sharing",
+            "0.0-0.19": "Very Low - Minimal structural cohesion"
+        },
+        references=["Internal Definition"],
+        category="cohesion"
+    ),
 }
 
 
