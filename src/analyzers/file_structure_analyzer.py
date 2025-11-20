@@ -2,7 +2,7 @@ import ast
 import os
 from typing import Dict, List
 
-from core.models.analysis_result import AnalysisResult
+from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 
 

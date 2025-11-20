@@ -41,13 +41,9 @@ class PFPCalculator:
         """
         if n_total == 0:
             return 0.0
-        
-        # Calculate cohesion factor (CF)
         cf = 1.0
         if self.etapas_max > 1 and unique_stages > 1:
             cf = 1 - ((unique_stages - 1) / (self.etapas_max - 1))
-        
-        # Calculate PFP: ML ratio × cohesion factor
         pfp_score = (n_ml / n_total) * cf
         
         return round(pfp_score, 4)

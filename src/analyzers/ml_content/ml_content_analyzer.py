@@ -4,7 +4,7 @@ import json
 from typing import Dict, List
 
 from analyzers.base_analyzer import BaseAnalyzer
-from core.models.analysis_result import AnalysisResult
+from core.analysis_result import AnalysisResult
 
 
 class MLContentAnalyzer(BaseAnalyzer):

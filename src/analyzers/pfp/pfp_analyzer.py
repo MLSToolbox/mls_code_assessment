@@ -2,11 +2,11 @@ import os
 from typing import Dict, List, Set, Any
 from collections import defaultdict
 
-from core.models.analysis_result import AnalysisResult
+from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.pfp.pfp_calculator import PFPCalculator
 from analyzers.pfp.pfp_evaluator import PFPEvaluator
-from core.exceptions import AnalyzerError
+
 
 class PFPAnalyzer(BaseAnalyzer):
     """
@@ -27,31 +27,18 @@ class PFPAnalyzer(BaseAnalyzer):
     
     def __init__(self, session_id: str, local_path: str, context=None):
         super().__init__(session_id, local_path, context)
-        
-        # Initialize PFP calculator with updated ETAPAS_MAX = 6
         self.calculator = PFPCalculator(etapas_max=6)
-        
-        # Initialize PFP evaluator for rule-based diagnosis/recommendations
         self.evaluator = PFPEvaluator()
 
     def analyze(self) -> AnalysisResult:
-        """
-        Runs the PFP analysis for all packages in the project.
-
-        It relies on the FPC analysis results being available in the context.
-        Dependencies are automatically resolved by the @requires decorator.
-        """
-
+        
         packages = self._discover_packages()
         package_results = {}
         total_pfp_score = 0
-        
-        # List to store per-package messages (following FPC pattern)
         messages_list = []
-        
         if not packages:
             return self._create_result(
-                score=10.0, 
+                score=0, 
                 messages=[],
                 module_count=0,
                 details={"message": "No Python packages found to analyze."}
@@ -61,7 +48,7 @@ class PFPAnalyzer(BaseAnalyzer):
             package_results[pkg_path] = self._analyze_package(pkg_path, modules)
             total_pfp_score += package_results[pkg_path]['pfp_score']
             
-            # Use evaluator to generate diagnosis/recommendation message
+            
             evaluation = self.evaluator.evaluate_package(pkg_path, package_results[pkg_path])
             if evaluation:
                 messages_list.append(evaluation)
@@ -73,7 +60,7 @@ class PFPAnalyzer(BaseAnalyzer):
 
         return self._create_result(
             score=final_score,
-            messages=messages_list,  # Use list format like FPC
+            messages=messages_list,  
             module_count=len(self.context.get_all_python_files()),
             details={
                 "summary": {
@@ -100,7 +87,6 @@ class PFPAnalyzer(BaseAnalyzer):
         Returns:
             Dictionary with package PFP metrics
         """
-        # Collect FPC results for all modules in package
         fpc_results = []
         for module_path in modules:
             fpc_result = self.context.get_file_metric(module_path, 'fpc')
@@ -108,7 +94,7 @@ class PFPAnalyzer(BaseAnalyzer):
                 fpc_result['file_path'] = module_path
                 fpc_results.append(fpc_result)
         
-        # Aggregate FPC metrics to package level
+        
         aggregated = self.calculator.aggregate_package_metrics(fpc_results)
         
         n_total = aggregated['n_total']
@@ -118,12 +104,12 @@ class PFPAnalyzer(BaseAnalyzer):
         
         n_etapas = len(all_stages)
         
-        # Get phases from FPC analysis (already calculated)
+        
         all_phases = set()
         for fpc_result in fpc_results:
             all_phases.update(fpc_result.get('phases_detected', []))
         
-        # Calculate PFP using calculator
+        
         pfp_score = self.calculator.calculate_pfp(n_total, n_ml, n_etapas)
         purity_level = self.calculator.get_purity_level(pfp_score)
         
@@ -182,7 +168,6 @@ class PFPAnalyzer(BaseAnalyzer):
                     "has_ml_content": data['ml_modules'] > 0,
                     "is_pure_package": data['ml_modules'] == data['total_modules'] and data['unique_stages_found'] == 1
                 },
-             
             }
         return formatted
         
@@ -192,74 +177,3 @@ class PFPAnalyzer(BaseAnalyzer):
             level = data['purity_level']
             summary[level] += 1
         return summary
-    
-    def _get_stage_to_package_mapping(self) -> Dict[str, List[str]]:
-        """Returns suggested package names for each ML pipeline stage."""
-        return {
-            'data_collection': ['data', 'data/collection', 'data/ingest'],
-            'data_cleaning': ['data/preprocessing', 'data/cleaning', 'data/prep'],
-            'data_labeling': ['data/labeling', 'data/annotation', 'labeling'],
-            'feature_engineering': ['features', 'feature_engineering', 'features/processing'],
-            'model_training': ['training', 'training/models', 'training/experiments'],
-            'model_evaluation': ['evaluation', 'evaluation/metrics', 'validation']
-        }
-    
-    def _classify_modules_by_stage(self, modules: List[Dict[str, Any]]) -> Dict[str, List[str]]:
-        """Groups module file paths by their detected pipeline stages."""
-        files_by_stage: Dict[str, List[str]] = {}
-        for module in modules:
-            for stage in module.get('stages', []):
-                files_by_stage.setdefault(stage, []).append(module['path'])
-        return files_by_stage
-    
-    def _identify_dominant_stage(self, files_by_stage: Dict[str, List[str]]) -> str:
-        """Returns the stage with the most files, or None if empty."""
-        if not files_by_stage:
-            return None
-        stage_counts = {stage: len(files) for stage, files in files_by_stage.items()}
-        return max(stage_counts, key=stage_counts.get)
-    
-    def _generate_file_move_suggestions(
-        self, 
-        files_by_stage: Dict[str, List[str]], 
-        dominant_stage: str,
-        stage_to_suggested_pkgs: Dict[str, List[str]]
-    ) -> List[str]:
-        """Generates concrete file move suggestions for minority stages."""
-        moves: List[str] = []
-        for stage, files in files_by_stage.items():
-            if stage == dominant_stage:
-                continue
-            suggested_names = stage_to_suggested_pkgs.get(stage, [stage])
-            suggested_pkg = suggested_names[0]
-            example_files = files[:3]
-            for file_path in example_files:
-                fname = os.path.basename(file_path)
-                new_path = os.path.join(suggested_pkg, fname)
-                moves.append(f"Move '{file_path}' → '{new_path}' (belongs to stage '{stage}')")
-        return moves
-    
-    def _detect_deployment_candidates(self, modules: List[Dict[str, Any]]) -> List[str]:
-        """Identifies files likely related to deployment/registry by filename heuristics."""
-        keywords = ('promote', 'deploy', 'registry', 'register', 'push_model', 'serve', 'inference')
-        candidates = []
-        for module in modules:
-            path = module['path']
-            if any(keyword in os.path.basename(path).lower() for keyword in keywords):
-                candidates.append(path)
-        return candidates
-    
-    def _generate_priority_message(
-        self, 
-        pfp_score: float, 
-        package_path: str, 
-        dominant_stage: str
-    ) -> str:
-        """Generates priority guidance message based on PFP score."""
-        if pfp_score < 0.4:
-            return f"HIGH PRIORITY: PFP {pfp_score:.2f} — split the package by responsibility and apply the suggested file moves above to achieve immediate gains."
-        elif pfp_score < 0.6:
-            return f"MEDIUM PRIORITY: PFP {pfp_score:.2f} — consider moving the listed files and consolidating ML logic into '{package_path}/{dominant_stage}' or suggested packages."
-        return None
-    
-    

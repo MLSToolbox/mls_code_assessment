@@ -1,20 +1,13 @@
 from flask import Flask, request, g
 from flask_cors import cross_origin
-from datetime import datetime,timezone
-import warnings
+from pydantic import ValidationError as PydanticValidationError
 
-from session.session_manager import SessionManager
-from session.session_storage import SessionStorage
 from api.serializers import ResponseSerializer
-from core.exceptions import SessionError
+from api.services import UploadService, AnalysisService
+from api.validation import validate_zip_file
+from analyzers.pipeline.pipeline_overrides import AnalysisRequest
+from core.exceptions import ValidationError
 import config.settings as config
-from analyzers.factory import AnalyzerFactory
-from core.tree_generator import TreeGenerator
-from core.models.pipeline_overrides import AnalysisRequest
-from core.models.analysis_result import AnalysisResult
-from core.metrics import get_metric_metadata
-from utils.validation import validate_analysis_request, validate_zip_file
-from core.analysis_context import AnalysisContext
 
 
 def create_routes(app: Flask) -> Flask:
@@ -27,42 +20,9 @@ def create_routes(app: Flask) -> Flask:
         
         Returns session_id, tree_structure, and auto_detected_pipeline.
         """
-        try:
-            app_zip, error = validate_zip_file(request)
-            if error:
-                return ResponseSerializer.error(error, 400)
-            
-            session = SessionManager(
-                app_zip=app_zip,
-                base_path=config.settings.SESSION_BASE_PATH
-            )
-            
-            session.ensure_setup()
-            
-            tree_generator = TreeGenerator(session.local_path)
-            tree_structure = tree_generator.generate()
-            
-            pipeline_analyzer = AnalyzerFactory.create_analyzer(
-                "pipeline", session.session_id, session.local_path
-            )
-            pipeline_result = pipeline_analyzer.analyze()
-            
-            session.save_session(
-                tree_structure=tree_structure,
-                auto_detected_pipeline=pipeline_result.details,
-                ttl_minutes=config.settings.SESSION_TTL_MINUTES
-            )
-            
-            return ResponseSerializer.success({
-                "session_id": session.session_id,
-                "tree_structure": tree_structure,
-                "auto_detected_pipeline": pipeline_result.details
-            })
-            
-        except SessionError as e:
-            return ResponseSerializer.error(f"Session error: {str(e)}", 400)
-        except Exception as e:
-            return ResponseSerializer.error(f"Upload failed: {str(e)}", 500)
+        app_zip = validate_zip_file(request)
+        result = UploadService.process_upload(app_zip)
+        return ResponseSerializer.success(result)
 
     @app.route(f'{config.settings.API_PREFIX}/analyze/<session_id>', methods=['POST'])
     @cross_origin()
@@ -80,146 +40,21 @@ def create_routes(app: Flask) -> Flask:
           }
         }
         """
-        try:
-            #Search for session
-            if not SessionStorage.exists(session_id, config.settings.SESSION_BASE_PATH):
-                return ResponseSerializer.error("Session not found or expired", 404)
-            
-            data = request.get_json()
-            if not data:
-                return ResponseSerializer.error("Request body required", 400)
-            
-            is_valid, error_msg = validate_analysis_request(data)
-            if not is_valid:
-                return ResponseSerializer.error(error_msg, 400)
-            
-            analysis_request = AnalysisRequest.from_dict(data)
-            
-            # Get ordered analyzers from middleware (or fallback to original)
-            ordered_analyzers = getattr(g, 'ordered_analyzers', analysis_request.analyzers)
-            
-            all_files = data.get('all_files', False)
-            
-            session = SessionManager.load_session(
-                session_id, 
-                base_path=config.settings.SESSION_BASE_PATH
-            )
-
-            
-            metadata = session.get_metadata()
-            pipeline_metadata = metadata.get("auto_detected_pipeline")
-            
-            shared_context = AnalysisContext(
-                session_id, 
-                session.local_path,
-                pipeline_metadata=pipeline_metadata,
-                all_files=all_files  # Pass all_files to context
-            )
-            
-            results = {}
+        data = request.get_json()
         
-            
-            if "pipeline" in ordered_analyzers:
-                pipeline_analyzer = AnalyzerFactory.create_analyzer(
-                    "pipeline", session_id, session.local_path, shared_context
-                )
-                
-                
-                if analysis_request.pipeline_overrides:
-                    metadata = session.get_metadata()
-                    auto_detected = metadata["auto_detected_pipeline"]
-                    
-                    modified = pipeline_analyzer.apply_overrides(
-                        auto_detected=auto_detected,
-                        overrides=analysis_request.pipeline_overrides
-                    )
-                    
-                    results["pipeline"] = AnalysisResult(
-                        analyzer_id="pipeline_detection",
-                        score=10.0 if modified["is_valid_pipeline"] else 0.0,
-                        message_count={},
-                        module_count=modified.get("files_analyzed", 0),
-                        metric_metadata=get_metric_metadata("pipeline_detection"),
-                        details=modified
-                    )
-                else:
-                    results["pipeline"] = pipeline_analyzer.analyze()
-            
-            # Execute in dependency order (dependencies run first)
-            for analyzer_type in ordered_analyzers:
-                if analyzer_type == "pipeline":
-                    continue  # Already handled above
-                
-                
-                analyzer = AnalyzerFactory.create_analyzer(
-                    analyzer_type, session_id, session.local_path, shared_context
-                )
-                result = analyzer.analyze()
-                
-                results[analyzer_type] = result
-            
-            serialized_results = {
-                key: value.to_dict() if isinstance(value, AnalysisResult) else value
-                for key, value in results.items()
-            }
-            
-            session.save_analysis_results(serialized_results)
-            
-            return ResponseSerializer.success({
-                "session_id": session_id,
-                "timestamp":datetime.now(timezone.utc).isoformat() + "Z",
-                "results": serialized_results
-            })
-            
-        except SessionError as e:
-            return ResponseSerializer.error(f"Session error: {str(e)}", 400)
-        except Exception as e:
-            print(e)
-            return ResponseSerializer.error(f"Analysis failed: {str(e)}", 500)
-
-    @app.route(f'{config.settings.API_PREFIX}/rate_app', methods=['POST'])
-    @cross_origin()
-    def rate_app():
-        """
-        Legacy endpoint for backward compatibility.
-        
-        @deprecated Use /api/upload-zip + /api/analyze instead
-        """
-        warnings.warn(
-            "rate_app endpoint is deprecated. Use /upload-zip + /analyze instead",
-            DeprecationWarning
-        )
+        if not data:
+            return ResponseSerializer.error("Request body required", 400)
         
         try:
-            app_zip, error = validate_zip_file(request)
-            if error:
-                return ResponseSerializer.error(error, 400)
-            
-            session = SessionManager(
-                app_zip=app_zip,
-                analyzer_types=['pylint', 'radon_cc', 'radon_mi'],
-                base_path=config.settings.SESSION_BASE_PATH
-            )
-            
-            session.ensure_setup()
-            
-            results = session.run_analysis()
-            
-            legacy_response = {
-                "session_id": session.session_id,
-                "results": {
-                    analyzer_type: {
-                        "score": result.score,
-                        "message_count": result.message_count,
-                        "module_count": result.module_count
-                    }
-                    for analyzer_type, result in results.items()
-                }
-            }
-            
-            return ResponseSerializer.success(legacy_response)
-            
-        except Exception as e:
-            return ResponseSerializer.error(f"Analysis failed: {str(e)}", 500)
+            analysis_request = AnalysisRequest.model_validate(data)
+        except PydanticValidationError as e:
+            # Convert Pydantic validation errors to our ValidationError
+            errors = e.errors()
+            first_error = errors[0]
+            field = ".".join(str(loc) for loc in first_error['loc'])
+            raise ValidationError(first_error['msg'], field=field)
+        
+        result = AnalysisService.analyze_session(session_id, analysis_request)
+        return ResponseSerializer.success(result)
 
     return app

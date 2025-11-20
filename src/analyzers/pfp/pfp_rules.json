@@ -1,103 +1,195 @@
 {
   "rules": [
     {
-      "id": 1,
+      "id": "P01",
       "conditions": {
-        "purity_level": "Very Low",
-        "has_ml_content": true,
-        "stage_count": ">1"
+        "number_of_phases": 0,
+        "number_of_stages": 0,
+        "ml_ratio": 0
       },
-      "diagnosis_template": "The purity of package '{package_name}' is very low (PFP = {pfp_score:.2f}). It contains {ml_modules}/{total_modules} ML modules spanning {stage_count} different pipeline stages: {stages_list}.",
-      "recommendation_template": "HIGH PRIORITY: Split package '{package_name}' by pipeline stage responsibility. Move files to stage-specific packages to achieve single responsibility. See detailed file move suggestions in the package recommendations.",
+      "diagnosis": "Package '{package_name}' contains no ML-related code (PFP = {pfp_score:.2f}). This package appears to be pure utility/infrastructure code with no pipeline functionality detected.",
+      "recommendation": "ACTION REQUIRED: Rename this package to clearly indicate its non-ML purpose (e.g., 'utils/', 'common/', 'helpers/', or 'infrastructure/'). Move it outside the main ML pipeline directory structure to avoid confusion and improve project organization.",
+      "severity": "medium"
+    },
+    {
+      "id": "P02",
+      "conditions": {
+        "number_of_phases": 0,
+        "number_of_stages": ">1"
+      },
+      "diagnosis": "Package '{package_name}' has unusual structure (PFP = {pfp_score:.2f}). Multiple stages detected but no phase classification, indicating potential misclassification or mixed utility code.",
+      "recommendation": "REVIEW NEEDED: This pattern is uncommon. Verify that FPC analysis is correctly identifying ML content. If this is utility code, consolidate into a single utilities package. If it contains ML code, ensure proper phase detection is working.",
+      "severity": "medium"
+    },
+    {
+      "id": "P03",
+      "conditions": {
+        "number_of_phases": ">1",
+        "number_of_stages": ">1",
+        "ml_ratio": 0
+      },
+      "diagnosis": "Package '{package_name}' shows phase/stage detection without ML content (PFP = {pfp_score:.2f}). This indicates a potential analysis anomaly.",
+      "recommendation": "INVESTIGATION REQUIRED: Review this package manually. This pattern suggests either: (1) misclassification of utility code, (2) incomplete FPC analysis, or (3) abstract base classes. Consider refactoring if this is utility code.",
+      "severity": "low"
+    },
+    {
+      "id": "P04",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": 0,
+        "ml_ratio": ">0"
+      },
+      "diagnosis": "Package '{package_name}' has ML content with phase classification but no stage detection (PFP = {pfp_score:.2f}). This may indicate abstract or incomplete pipeline code.",
+      "recommendation": "VERIFY: Check if this package contains abstract base classes, interfaces, or incomplete implementations. If it's concrete pipeline code, review why stage detection failed. Consider adding proper pipeline stage indicators.",
+      "severity": "low"
+    },
+    {
+      "id": "P05",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": 1,
+        "ml_ratio": 1
+      },
+      "diagnosis": "Package '{package_name}' exhibits EXCELLENT purity (PFP = {pfp_score:.2f}). All modules focus on a single pipeline stage within one phase. This is the ideal package structure.",
+      "recommendation": "MAINTAIN: Keep this structure as your codebase grows. Use this package as a reference example for organizing other parts of your ML pipeline. Document this pattern for team members.",
+      "severity": "info"
+    },
+    {
+      "id": "P06",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": 1,
+        "ml_ratio": "<1"
+      },
+      "diagnosis": "Package '{package_name}' has GOOD single-stage focus (PFP = {pfp_score:.2f}), but includes non-ML utility code mixed with pipeline logic. This dilutes package cohesion.",
+      "recommendation": "REFACTOR: Extract utility/helper functions into a separate package structure:\n  1. Create '{package_name}/core/' for stage-specific logic\n  2. Move utilities to '{package_name}/utils/' or a top-level 'utils/' package\n  3. Keep only stage-specific ML logic in the main package",
+      "severity": "low"
+    },
+    {
+      "id": "P07",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": ">1",
+        "ml_ratio": 1,
+        "average_elems_per_stage": 1
+      },
+      "diagnosis": "Package '{package_name}' has VERY HIGH purity (PFP = {pfp_score:.2f}). Multiple stages within the same phase, with one module per stage. This indicates good separation but potential for better organization.",
+      "recommendation": "OPTIONAL IMPROVEMENT: Current structure is acceptable for small packages. As you scale, consider creating subpackages:\n  - If stages share common logic, keep them together\n  - If stages are independent, split into: '{package_name}/stage1/', '{package_name}/stage2/', etc.\n  Monitor package growth and split when it exceeds 10 files.",
+      "severity": "info"
+    },
+    {
+      "id": "P08",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": ">1",
+        "ml_ratio": 1,
+        "average_elems_per_stage": ">1"
+      },
+      "diagnosis": "Package '{package_name}' has HIGH purity (PFP = {pfp_score:.2f}) with all ML content, but mixes multiple stages with multiple modules per stage. This creates maintainability challenges.",
+      "recommendation": "RECOMMENDED REFACTORING:\n  1. Identify the 2-3 most populated stages (those with >2 modules)\n  2. Create dedicated subpackages for each: '{package_name}/<stage_name>/'\n  3. Example structure:\n     {package_name}/\n       ├── data_collection/     # Stage 1 modules\n       ├── feature_engineering/ # Stage 2 modules\n       └── common/              # Shared utilities\n  This improves navigability and reduces cognitive load.",
+      "severity": "low"
+    },
+    {
+      "id": "P09",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": ">1",
+        "ml_ratio": 1,
+        "average_elems_per_stage": "<1"
+      },
+      "diagnosis": "Package '{package_name}' shows HIGH purity (PFP = {pfp_score:.2f}) with multiple stages but very few modules. This is an edge case that may indicate over-fragmentation or early development.",
+      "recommendation": "MONITOR: Current structure is acceptable. As the package grows:\n  - Keep related stages together if they share significant logic\n  - Split into stage-specific packages when each stage has 3+ modules\n  - Ensure this isn't a sign of over-engineering with too many small files",
+      "severity": "info"
+    },
+    {
+      "id": "P10",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": ">1",
+        "ml_ratio": "<1",
+        "average_elems_per_stage": 1
+      },
+      "diagnosis": "Package '{package_name}' has MODERATE purity (PFP = {pfp_score:.2f}). Multiple stages from the same phase mixed with non-ML code, with single modules per stage.",
+      "recommendation": "CLEANUP REQUIRED:\n  1. PRIORITY 1: Extract non-ML utilities to 'utils/' or 'common/' package\n  2. PRIORITY 2: After cleanup, assess if remaining stages should be separated\n  3. Expected improvement: PFP score should increase to 0.7+ after moving utilities\n  This two-step approach will significantly improve maintainability.",
+      "severity": "medium"
+    },
+    {
+      "id": "P11",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": ">1",
+        "ml_ratio": "<1",
+        "average_elems_per_stage": ">1"
+      },
+      "diagnosis": "Package '{package_name}' has MEDIUM purity (PFP = {pfp_score:.2f}). This package suffers from two issues: (1) multiple stages with multiple modules each, and (2) non-ML utility code mixed in.",
+      "recommendation": "PRIORITY REFACTORING REQUIRED:\n  STEP 1 (High Priority): Separate by stage\n    - Create subpackages for each major stage\n    - Move stage-specific modules to: '{package_name}/<stage_name>/'\n  STEP 2 (High Priority): Extract utilities\n    - Move non-ML code to 'utils/' or '{package_name}/common/'\n  STEP 3: Re-evaluate\n    - After refactoring, each subpackage should achieve PFP > 0.8\n  Estimated effort: 4-8 hours depending on package size.",
+      "severity": "medium"
+    },
+    {
+      "id": "P12",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": ">1",
+        "ml_ratio": "<1",
+        "average_elems_per_stage": "<1"
+      },
+      "diagnosis": "Package '{package_name}' shows MODERATE purity (PFP = {pfp_score:.2f}) with fragmented structure. Multiple stages, low module density, and non-ML code present.",
+      "recommendation": "CONSOLIDATION NEEDED:\n  1. First, separate ML code from utilities\n  2. Evaluate if stages can be consolidated (low module count suggests possible over-fragmentation)\n  3. Consider merging related stages or moving to appropriate existing packages\n  4. Target structure: Either consolidate to single-stage packages or merge with related functionality",
+      "severity": "medium"
+    },
+    {
+      "id": "P13",
+      "conditions": {
+        "number_of_phases": 2,
+        "ml_ratio": 1,
+        "average_elems_per_stage": 1
+      },
+      "diagnosis": "Package '{package_name}' has HIGH cross-phase scope (PFP = {pfp_score:.2f}). All ML content, but spans 2 different pipeline phases (e.g., data preprocessing + model training). Single module per stage.",
+      "recommendation": "PHASE SEPARATION RECOMMENDED:\n  While current structure is clean, mixing phases reduces conceptual clarity.\n  Suggested action:\n    1. Split by phase: Create 'phase1_<name>/' and 'phase2_<name>/' packages\n    2. Example: 'data_preparation/' and 'model_development/'\n    3. This improves team ownership and reduces cross-phase dependencies\n  Phase separation is a best practice for larger teams.",
+      "severity": "low"
+    },
+    {
+      "id": "P14",
+      "conditions": {
+        "number_of_phases": 2,
+        "ml_ratio": 1,
+        "average_elems_per_stage": ">1"
+      },
+      "diagnosis": "Package '{package_name}' has MODERATE purity (PFP = {pfp_score:.2f}). Crosses 2 pipeline phases with multiple modules per stage. This indicates significant functional diversity.",
+      "recommendation": "RESTRUCTURE BY PHASE:\n  CRITICAL: Cross-phase packages create tight coupling and hinder team autonomy.\n  Required actions:\n    1. Identify which stages belong to which phase\n    2. Create phase-specific packages:\n       - Phase 1 package: 'data_pipeline/' or 'preprocessing/'\n       - Phase 2 package: 'model_pipeline/' or 'training/'\n    3. Within each phase package, create stage subpackages\n  Expected result: 2 packages with PFP > 0.8 each\n  Estimated effort: 6-10 hours",
+      "severity": "high"
+    },
+    {
+      "id": "P15",
+      "conditions": {
+        "number_of_phases": 2,
+        "ml_ratio": "<1",
+        "average_elems_per_stage": 1
+      },
+      "diagnosis": "Package '{package_name}' has MODERATE-LOW purity (PFP = {pfp_score:.2f}). Spans 2 phases, includes non-ML code, with low module density per stage.",
+      "recommendation": "TWO-PHASE CLEANUP:\n  STEP 1: Extract utilities\n    - Move non-ML code to a shared utilities package\n  STEP 2: Split by phase\n    - Create phase-specific packages for remaining ML code\n    - Consider if some stages can be consolidated given low module count\n  This package tries to do too much - simplify its responsibilities.",
+      "severity": "medium"
+    },
+    {
+      "id": "P16",
+      "conditions": {
+        "number_of_phases": 2,
+        "ml_ratio": "<1",
+        "average_elems_per_stage": ">1"
+      },
+      "diagnosis": "Package '{package_name}' has LOW purity (PFP = {pfp_score:.2f}). This is a problem package: crosses 2 phases, mixes ML and non-ML code, with high module density. High complexity and maintenance burden.",
+      "recommendation": "URGENT REFACTORING REQUIRED:\n  This package violates multiple design principles.\n  \n  PHASE 1 (Week 1): Separate by phase\n    1. Create 2 new phase-specific packages\n    2. Move modules to appropriate phase package\n    3. Document phase boundaries clearly\n  \n  PHASE 2 (Week 2): Extract utilities\n    1. Identify and move non-ML code to 'utils/' package\n    2. Extract shared functionality to 'common/' if needed\n  \n  PHASE 3 (Week 3): Organize by stage\n    1. Within each phase package, create stage subpackages\n    2. Move modules to stage-specific locations\n  \n  Target: Transform into 2-3 packages, each with PFP > 0.8\n  Estimated effort: 15-20 hours\n  Team impact: High - coordinate with all stakeholders",
       "severity": "critical"
     },
     {
-      "id": 2,
+      "id": "P17",
       "conditions": {
-        "purity_level": "Very Low",
-        "has_ml_content": true,
-        "stage_count": 1
+        "number_of_phases": ">2",
+        "ml_ratio": ">0"
       },
-      "diagnosis_template": "The purity of package '{package_name}' is very low (PFP = {pfp_score:.2f}) despite focusing on a single stage. Only {ml_modules}/{total_modules} modules contain ML content.",
-      "recommendation_template": "Move non-ML modules ({non_ml_count} files) to a separate utilities package to increase purity. Consider creating '{package_name}/utils' or using a top-level 'utils' package.",
-      "severity": "high"
-    },
-    {
-      "id": 3,
-      "conditions": {
-        "purity_level": "Very Low",
-        "has_ml_content": false,
-        "stage_count": 0
-      },
-      "diagnosis_template": "Package '{package_name}' contains no ML-related modules (PFP = {pfp_score:.2f}). All {total_modules} modules are utility or support code.",
-      "recommendation_template": "This package should be renamed or documented as a non-ML utilities package. Consider moving it outside the ML pipeline structure or clearly marking it as infrastructure/utils.",
-      "severity": "medium"
-    },
-    {
-      "id": 4,
-      "conditions": {
-        "purity_level": "Low",
-        "has_ml_content": true,
-        "stage_count": ">1"
-      },
-      "diagnosis_template": "The purity of package '{package_name}' is low (PFP = {pfp_score:.2f}). It mixes {stage_count} pipeline stages: {stages_list}.",
-      "recommendation_template": "MEDIUM PRIORITY: Refactor package '{package_name}' to focus on a single pipeline stage. Move minority-stage files to appropriate stage-specific packages. The dominant stage is '{dominant_stage}'.",
-      "severity": "high"
-    },
-    {
-      "id": 5,
-      "conditions": {
-        "purity_level": "Low",
-        "has_ml_content": true,
-        "stage_count": 1
-      },
-      "diagnosis_template": "Package '{package_name}' has low purity (PFP = {pfp_score:.2f}) despite single-stage focus. Only {ml_modules}/{total_modules} modules are ML-related.",
-      "recommendation_template": "Separate non-ML modules from ML pipeline code. Move {non_ml_count} non-ML files to a utilities package to improve separation of concerns.",
-      "severity": "medium"
-    },
-    {
-      "id": 6,
-      "conditions": {
-        "purity_level": "Moderate",
-        "has_ml_content": true,
-        "stage_count": ">1"
-      },
-      "diagnosis_template": "Package '{package_name}' has moderate purity (PFP = {pfp_score:.2f}). It contains {ml_modules} ML modules across {stage_count} stages: {stages_list}.",
-      "recommendation_template": "Consider splitting '{package_name}' if it grows larger. Current stage mixing is acceptable but may become problematic as the codebase scales. The dominant stage is '{dominant_stage}'.",
-      "severity": "low"
-    },
-    {
-      "id": 7,
-      "conditions": {
-        "purity_level": "Moderate",
-        "has_ml_content": true,
-        "stage_count": 1
-      },
-      "diagnosis_template": "Package '{package_name}' has moderate purity (PFP = {pfp_score:.2f}). It focuses on {stages_list} but includes some non-ML code.",
-      "recommendation_template": "Package structure is acceptable. To reach high purity, move remaining {non_ml_count} non-ML modules to a separate utilities package.",
-      "severity": "low"
-    },
-    {
-      "id": 8,
-      "conditions": {
-        "purity_level": "High",
-        "has_ml_content": true,
-        "stage_count": 1
-      },
-      "diagnosis_template": "Package '{package_name}' has excellent purity (PFP = {pfp_score:.2f}). It maintains strong single-stage focus on {stages_list} with {ml_modules}/{total_modules} ML modules.",
-      "recommendation_template": "No refactoring needed. Package '{package_name}' demonstrates excellent single responsibility principle adherence. Maintain this structure as the codebase grows.",
-      "severity": "info"
-    },
-    {
-      "id": 9,
-      "conditions": {
-        "purity_level": "High",
-        "has_ml_content": true,
-        "stage_count": ">1"
-      },
-      "diagnosis_template": "Package '{package_name}' has high purity (PFP = {pfp_score:.2f}) with mostly ML content, but spans {stage_count} stages: {stages_list}.",
-      "recommendation_template": "Consider splitting by stage as the package grows. Current structure is acceptable for small packages but may benefit from stage separation for better maintainability.",
-      "severity": "info"
+      "diagnosis": "Package '{package_name}' has VERY LOW purity (PFP = {pfp_score:.2f}). Spans 3+ pipeline phases - this is a severe architectural issue. The package has become a monolithic catch-all.",
+      "recommendation": "CRITICAL ARCHITECTURAL ISSUE:\n  This package violates fundamental separation of concerns.\n  \n  IMMEDIATE ACTION REQUIRED:\n    1. STOP adding new code to this package\n    2. Schedule architecture review meeting with team\n    3. Create phase-specific packages immediately:\n       - 'data_pipeline/' for data phases\n       - 'model_pipeline/' for modeling phases\n       - 'deployment_pipeline/' for deployment phases\n    4. Migrate modules systematically over 2-4 weeks\n    5. Deprecate this package once empty\n  \n  This level of mixing typically indicates:\n    - Lack of initial architecture planning\n    - Technical debt accumulation\n    - Need for team training on ML project structure\n  \n  Estimated effort: 20-40 hours\n  Business impact: High - affects all team members",
+      "severity": "critical"
     }
   ]
 }

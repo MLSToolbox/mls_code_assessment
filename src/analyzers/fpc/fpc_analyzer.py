@@ -3,7 +3,7 @@ import os
 import json
 from typing import Dict, List, Set
 
-from core.models.analysis_result import AnalysisResult
+from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.ml_content import MLContentAnalyzer
 from analyzers.fpc.nloc_calculator import NLOCCalculator
@@ -25,8 +25,8 @@ class FPCAnalyzer(BaseAnalyzer):
         super().__init__(session_id, local_path, context)
         
         pipeline_stages_json_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            'config',
+            os.path.dirname(os.path.dirname(__file__)),
+            'pipeline',
             'pipeline_stages.json'
         )
         
@@ -259,18 +259,14 @@ class FPCAnalyzer(BaseAnalyzer):
         detected_stages = pipeline_metadata.get("detected_stages", {})
         file_stages = set()
         
+        # Normalize file_path (remove leading slash if present for comparison)
+        normalized_file_path = file_path.lstrip('/')
+        
         for stage_name, file_list in detected_stages.items():
             for file_info in file_list:
-                # file_info may be a dict or tuple depending on producer; handle both
-                file_ref = None
-                if isinstance(file_info, dict):
-                    file_ref = file_info.get("file")
-                elif isinstance(file_info, (list, tuple)) and len(file_info) > 0:
-                    file_ref = file_info[0]
-                else:
-                    file_ref = None
-
-                if file_ref == file_path:
+                # Normalize the file path from metadata as well
+                metadata_file_path = file_info["file"].lstrip('/')
+                if metadata_file_path == normalized_file_path:
                     file_stages.add(stage_name)
         
         return file_stages

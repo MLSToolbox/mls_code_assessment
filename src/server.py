@@ -4,6 +4,7 @@ from waitress import serve
 
 from api.routes import create_routes
 from api.middleware import setup_middleware
+from api.error_handlers import register_error_handlers
 from config.settings import settings
 from session.cleanup_scheduler import start_scheduler 
 
@@ -15,8 +16,11 @@ logging.basicConfig(
 def create_app() -> Flask:
     """Create and configure Flask application."""
     app = Flask(__name__)
+    app.config['DEBUG'] = settings.DEBUG
     
     app = setup_middleware(app)
+    
+    register_error_handlers(app)
     
     app = create_routes(app)
     

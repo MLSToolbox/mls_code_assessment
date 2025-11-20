@@ -4,15 +4,15 @@ import json
 from typing import Dict, List, Optional, Tuple, Set
 from collections import defaultdict
 
-from core.models.analysis_result import AnalysisResult
-from core.models.pipeline_overrides import PipelineOverrides
+from core.analysis_result import AnalysisResult
+from analyzers.pipeline.pipeline_overrides import PipelineOverrides
 from analyzers.base_analyzer import BaseAnalyzer
 
 
 class PipelineAnalyzer(BaseAnalyzer):
     
-    def __init__(self, session_id: str, local_path: str, config_path: Optional[str] = None):
-        super().__init__(session_id, local_path)
+    def __init__(self, session_id: str, local_path: str, context=None, config_path: Optional[str] = None):
+        super().__init__(session_id, local_path, context)
         
         # Required stages for a valid pipeline
         self.required_stages = {
@@ -29,7 +29,7 @@ class PipelineAnalyzer(BaseAnalyzer):
             # Default configuration
             config_file = os.path.join(
                 os.path.dirname(__file__), 
-                "../config/pipeline_stages.json"
+                "pipeline_stages.json"
             )
             if os.path.exists(config_file):
                 with open(config_file, 'r') as f:

@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional, TYPE_CHECKING
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from core.metrics import MetricMetadata
+    from metrics import MetricMetadata
 
 
 @dataclass(frozen=True)

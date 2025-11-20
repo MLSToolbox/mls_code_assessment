@@ -1,4 +1,5 @@
 import os
+from typing import Literal, Set
 
 
 class Settings:
@@ -12,6 +13,30 @@ class Settings:
     
     # API settings
     API_PREFIX: str = '/api'
+    
+    # Valid analyzer types
+    VALID_ANALYZERS: Set[str] = {
+        "pylint",
+        "radon_cc",
+        "radon_mi",
+        "pipeline",
+        "fpc",
+        "pfp",
+        "file_structure",
+        "lccml",
+        "ml_content",
+        "ldsc",
+        "ifc_m"
+    }
+    
+    # Valid pipeline stages
+    VALID_PIPELINE_STAGES: Set[str] = {
+        "data_collection",
+        "data_cleaning",
+        "feature_engineering",
+        "model_training",
+        "model_evaluation"
+    }
     
     # Session settings
     SESSION_BASE_PATH: str = os.getenv('SESSION_BASE_PATH', '/tmp/mls_sessions')
@@ -55,3 +80,27 @@ class Settings:
 
 # Global settings instance
 settings = Settings()
+
+
+# Type aliases for type hints
+AnalyzerType = Literal[
+    "pylint",
+    "radon_cc",
+    "radon_mi",
+    "pipeline",
+    "fpc",
+    "pfp",
+    "file_structure",
+    "lccml",
+    "ml_content",
+    "ldsc",
+    "ifc_m"
+]
+
+PipelineStage = Literal[
+    "data_collection",
+    "data_cleaning",
+    "feature_engineering",
+    "model_training",
+    "model_evaluation"
+]
