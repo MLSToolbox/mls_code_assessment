@@ -213,7 +213,7 @@ class LCCMLAnalyzer(BaseAnalyzer):
         lccml = n_connected_pairs / n_possible_pairs if n_possible_pairs > 0 else 0
         
         # Determine cohesion level
-        cohesion_level = self._determine_cohesion_level(lccml)
+        cohesion_level = self._categorize_cohesion(lccml)
         
         return {
             'lccml': round(lccml, 3),
@@ -718,7 +718,7 @@ class LCCMLAnalyzer(BaseAnalyzer):
         
         return calls
     
-    def _determine_cohesion_level(self, lccml: float) -> str:
+    def _categorize_cohesion(self, lccml: float) -> str:
         """Determine cohesion level from LCCML score."""
         if lccml >= 0.8:
             return 'excellent'
