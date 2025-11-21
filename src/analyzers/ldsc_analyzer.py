@@ -86,7 +86,7 @@ class LDSCAnalyzer(BaseAnalyzer):
             messages=messages,
             module_count=results['summary']['total_files'],
             details=results,
-            group_by='by_package'
+           
         )
     
     def _analyze_file(self, tree: ast.Module, file_path: str) -> Dict:
@@ -232,7 +232,11 @@ class LDSCAnalyzer(BaseAnalyzer):
     def _generate_messages(self, results: Dict) -> List[Dict[str, Any]]:
         messages = []
         summary = results['summary']
-        
+        messages.append({
+            'diagnosis': f"Analyzed {summary['total_files']} files. Average LDSC: {summary['average_ldsc']:.2f}",
+            'recommendation': "Check individual files for details.",
+            'severity': 'info'
+        })
 
         
         for file_path, data in results['files'].items():

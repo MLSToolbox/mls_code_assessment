@@ -82,7 +82,7 @@ class IFCPAnalyzer(BaseAnalyzer):
             messages=messages,
             module_count=len(packages),
             details=results,
-            group_by='by_package'
+            
         )
     
     def _analyze_package(self, files: List[str], package_path: str) -> Dict:
