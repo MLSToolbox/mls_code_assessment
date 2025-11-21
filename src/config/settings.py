@@ -27,7 +27,8 @@ class Settings:
         "ml_content",
         "ldsc",
         "pdsc",
-        "ifc_m"
+        "ifc_m",
+        "pmcr"
     }
     
     # Valid pipeline stages

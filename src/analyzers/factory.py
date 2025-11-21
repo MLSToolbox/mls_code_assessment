@@ -26,6 +26,7 @@ class AnalyzerFactory:
             from analyzers.ldsc_analyzer import LDSCAnalyzer
             from analyzers.pdsc_analyzer import PDSCAnalyzer
             from analyzers.ifc_m_analyzer import IFCMAnalyzer
+            from analyzers.pmcr_analyzer import PMCRAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
@@ -40,6 +41,7 @@ class AnalyzerFactory:
                 "ldsc": LDSCAnalyzer,
                 "pdsc": PDSCAnalyzer,
                 "ifc_m": IFCMAnalyzer,
+                "pmcr": PMCRAnalyzer,
             }
         return cls._analyzers
     
