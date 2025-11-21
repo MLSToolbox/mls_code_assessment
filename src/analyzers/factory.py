@@ -26,6 +26,7 @@ class AnalyzerFactory:
             from analyzers.ldsc_analyzer import LDSCAnalyzer
             from analyzers.pdsc_analyzer import PDSCAnalyzer
             from analyzers.ifc_m_analyzer import IFCMAnalyzer
+            from analyzers.pmcr_analyzer import PMCRAnalyzer
             from analyzers.ifc_p_analyzer import IFCPAnalyzer
             
             cls._analyzers = {
@@ -41,6 +42,7 @@ class AnalyzerFactory:
                 "ldsc": LDSCAnalyzer,
                 "pdsc": PDSCAnalyzer,
                 "ifc_m": IFCMAnalyzer,
+                "pmcr": PMCRAnalyzer,
                 "ifc_p": IFCPAnalyzer,
             }
         return cls._analyzers

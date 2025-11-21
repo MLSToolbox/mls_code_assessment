@@ -280,6 +280,30 @@ METRICS_REGISTRY = {
         references=["Internal Definition"],
         category="cohesion"
     ),
+    
+    "pmcr": MetricMetadata(
+        metric_id="pmcr",
+        name="Package Module Cohesion Ratio",
+        description=(
+            "Measures the proportion of modules in a package that are interconnected, "
+            "considering both code dependencies and shared ML resources (datasets, models, APIs). "
+            "Adapts the Connected Pairs Ratio concept to the package level."
+        ),
+        formula=(
+            "PMCR(P) = Mc / (n(n-1)/2), where Mc = number of connected module pairs "
+            "(direct or indirect), n = total modules in package."
+        ),
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
+        interpretation={
+            "0.8-1.0": "Excellent - Highly cohesive package",
+            "0.6-0.79": "Good - Strong module interconnection",
+            "0.4-0.59": "Moderate - Some isolated modules",
+            "0.2-0.39": "Low - Many isolated modules",
+            "0.0-0.19": "Very Low - Fragmented package"
+        },
+        references=["Internal Definition"],
+        category="cohesion"
+    ),
 
     "ifc_p": MetricMetadata(
         metric_id="ifc_p",
