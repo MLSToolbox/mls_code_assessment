@@ -300,6 +300,10 @@ METRICS_REGISTRY = {
             "0.4-0.59": "Moderate - Some isolated modules",
             "0.2-0.39": "Low - Many isolated modules",
             "0.0-0.19": "Very Low - Fragmented package"
+        },
+        references=["Internal Definition"],
+        category="cohesion"
+    ),
 
     "ifc_p": MetricMetadata(
         metric_id="ifc_p",

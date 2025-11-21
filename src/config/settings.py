@@ -28,7 +28,7 @@ class Settings:
         "ldsc",
         "pdsc",
         "ifc_m",
-        "pmcr"
+        "pmcr",
         "ifc_p"
     }
     
