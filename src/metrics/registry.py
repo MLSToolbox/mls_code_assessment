@@ -256,7 +256,6 @@ METRICS_REGISTRY = {
             "Single Responsibility Principle - Clean Code by Robert C. Martin"
         ],
         category="cohesion"
-        
     ),
 
     "pdsc": MetricMetadata(
@@ -277,6 +276,29 @@ METRICS_REGISTRY = {
             "0.4-0.59": "Moderate - Some resource sharing",
             "0.2-0.39": "Low - Little resource sharing",
             "0.0-0.19": "Very Low - Minimal structural cohesion"
+        },
+        references=["Internal Definition"],
+        category="cohesion"
+    ),
+
+    "ifc_p": MetricMetadata(
+        metric_id="ifc_p",
+        name="Information Flow Cohesion - Package",
+        description=(
+            "Measures the functional cooperation between modules of a package via information flow. "
+            "Considers module invocations and data consumption (imports)."
+        ),
+        formula=(
+            "IFC-P(P) = (2 * sum(F_ij)) / (m * (m - 1)), where F_ij = 1 if module i invokes module j "
+            "or consumes its data."
+        ),
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
+        interpretation={
+            "0.8-1.0": "Excellent - High functional coupling within package",
+            "0.6-0.79": "Good - Modules are well connected",
+            "0.4-0.59": "Moderate - Some connections between modules",
+            "0.2-0.39": "Low - Few connections, loose package",
+            "0.0-0.19": "Very Low - Modules are independent"
         },
         references=["Internal Definition"],
         category="cohesion"
