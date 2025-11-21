@@ -85,7 +85,8 @@ class LDSCAnalyzer(BaseAnalyzer):
             score=round(score, 2),
             messages=messages,
             module_count=results['summary']['total_files'],
-            details=results
+            details=results,
+           
         )
     
     def _analyze_file(self, tree: ast.Module, file_path: str) -> Dict:
@@ -231,12 +232,12 @@ class LDSCAnalyzer(BaseAnalyzer):
     def _generate_messages(self, results: Dict) -> List[Dict[str, Any]]:
         messages = []
         summary = results['summary']
-        
         messages.append({
             'diagnosis': f"Analyzed {summary['total_files']} files. Average LDSC: {summary['average_ldsc']:.2f}",
             'recommendation': "Check individual files for details.",
             'severity': 'info'
         })
+
         
         for file_path, data in results['files'].items():
             if data.get('cohesion_level') in ['low', 'very_low']:

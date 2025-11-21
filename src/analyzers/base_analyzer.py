@@ -100,7 +100,7 @@ class BaseAnalyzer(ABC):
                     folders.append(item)
         
         return folders or ['.']
-    
+
     @property
     @abstractmethod
     def analyzer_id(self) -> str:
@@ -111,7 +111,8 @@ class BaseAnalyzer(ABC):
         score: float,
         messages: Union[Dict[str, Any], List[Dict[str, Any]]],
         module_count: int,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        
     ) -> AnalysisResult:
         """
         Create an AnalysisResult object.
@@ -123,6 +124,7 @@ class BaseAnalyzer(ABC):
                 - List[Dict] (new format): List of message dicts with file, diagnosis, recommendation, etc.
             module_count: Number of modules analyzed
             details: Optional additional details
+            group_by: Key to use for grouping messages (default: 'by_file')
         
         Returns:
             AnalysisResult object
@@ -144,7 +146,7 @@ class BaseAnalyzer(ABC):
             
             messages_dict = {
                 'total': len(messages),
-                'by_file': by_file
+                "by_file": by_file
             }
         else:
             # Old format: dict with total and by_file

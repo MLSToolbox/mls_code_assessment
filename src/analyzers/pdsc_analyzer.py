@@ -89,7 +89,8 @@ class PDSCAnalyzer(BaseAnalyzer):
             score=round(score, 2),
             messages=messages,
             module_count=len(packages),
-            details=results
+            details=results,
+           
         )
         
     def _analyze_package(self, files: List[str]) -> Dict:
@@ -214,11 +215,7 @@ class PDSCAnalyzer(BaseAnalyzer):
         messages = []
         summary = results['summary']
         
-        messages.append({
-            'diagnosis': f"Analyzed {summary['total_packages']} packages. Average PDSC: {summary['average_pdsc']:.2f}",
-            'recommendation': "Check individual packages for details.",
-            'severity': 'info'
-        })
+
         
         for pkg_name, data in results['packages'].items():
             pdsc = data['pdsc']
