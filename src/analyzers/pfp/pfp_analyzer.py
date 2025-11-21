@@ -73,7 +73,8 @@ class PFPAnalyzer(BaseAnalyzer):
                     "purity_summary": self._generate_summary(package_results)
                 },
                 "packages": self._format_package_results(package_results)
-            }
+            },
+            group_by='by_package'
         )
 
     def _analyze_package(self, pkg_path: str, modules: List[str]) -> Dict[str, Any]:

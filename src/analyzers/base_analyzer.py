@@ -100,7 +100,7 @@ class BaseAnalyzer(ABC):
                     folders.append(item)
         
         return folders or ['.']
-    
+
     @property
     @abstractmethod
     def analyzer_id(self) -> str:
@@ -111,7 +111,8 @@ class BaseAnalyzer(ABC):
         score: float,
         messages: Union[Dict[str, Any], List[Dict[str, Any]]],
         module_count: int,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        group_by: str = 'by_file'
     ) -> AnalysisResult:
         """
         Create an AnalysisResult object.
@@ -123,6 +124,7 @@ class BaseAnalyzer(ABC):
                 - List[Dict] (new format): List of message dicts with file, diagnosis, recommendation, etc.
             module_count: Number of modules analyzed
             details: Optional additional details
+            group_by: Key to use for grouping messages (default: 'by_file')
         
         Returns:
             AnalysisResult object
@@ -130,12 +132,12 @@ class BaseAnalyzer(ABC):
         # Convert list format to proper structure with by_file grouping
         if isinstance(messages, list):
             # New format: list of detailed messages
-            by_file = {}
+            grouped_messages = {}
             for msg in messages:
                 file_path = msg.get('file', 'unknown')
-                if file_path not in by_file:
-                    by_file[file_path] = []
-                by_file[file_path].append({
+                if file_path not in grouped_messages:
+                    grouped_messages[file_path] = []
+                grouped_messages[file_path].append({
                     'diagnosis': msg.get('diagnosis'),
                     'recommendation': msg.get('recommendation'),
                     'severity': msg.get('severity'),
@@ -144,7 +146,7 @@ class BaseAnalyzer(ABC):
             
             messages_dict = {
                 'total': len(messages),
-                'by_file': by_file
+                group_by: grouped_messages
             }
         else:
             # Old format: dict with total and by_file
