@@ -327,6 +327,31 @@ METRICS_REGISTRY = {
         references=["Internal Definition"],
         category="cohesion"
     ),
+    
+    "lpcml": MetricMetadata(
+        metric_id="lpcml",
+        name="Loose Package Cohesion Modified for ML",
+        description=(
+            "Measures the number of connected components within a package. "
+            "A connected component represents a group of modules related through "
+            "dependencies, shared data, model files, or ML library usage. "
+            "Lower values indicate better cohesion (ideally 1 component)."
+        ),
+        formula=(
+            "LPCML(P) = |CC(G_P)|, where G_P = (V, E) is the undirected dependency graph. "
+            "V = first-level elements (modules/subpackages), "
+            "E = edges exist when elements share resources (non-empty intersection)."
+        ),
+        ideal_range={"min": 1, "max": None, "optimal": "1", "acceptable": "2-3", "warning": ">3"},
+        interpretation={
+            "1": "Excellent - All modules form a single cohesive unit",
+            "2-3": "Acceptable - Package has few disconnected subgroups",
+            "4-5": "Moderate - Package fragmentation, consider reorganization",
+            ">5": "Poor - Highly fragmented package, refactoring needed"
+        },
+        references=["Internal Definition - Graph Theory Applied to ML Package Structure"],
+        category="cohesion"
+    ),
 }
 
 

@@ -29,7 +29,8 @@ class Settings:
         "pdsc",
         "ifc_m",
         "pmcr",
-        "ifc_p"
+        "ifc_p",
+        "lpcml"
     }
     
     # Valid pipeline stages
