@@ -1,6 +1,9 @@
 {
   "phases": {
-    "data_engineering": ["data_collection", "data_cleaning"],
+    "data_engineering": [
+      "data_collection",
+      "data_cleaning"
+    ],
     "model_development": [
       "feature_engineering",
       "model_training",
@@ -10,7 +13,13 @@
   "stages": {
     "data_collection": {
       "filename_patterns": [
-        "collect", "scrape", "loader", "fetch", "ingest", "extract", "download"
+        "collect",
+        "scrape",
+        "loader",
+        "fetch",
+        "ingest",
+        "extract",
+        "download"
       ],
       "keywords": [
         "pd.read_csv",
@@ -26,12 +35,19 @@
         "boto3.client"
       ],
       "imports": [
-        "requests", "selenium", "scrapy", "boto3", "sklearn.datasets"
+        "requests",
+        "selenium",
+        "scrapy",
+        "boto3",
+        "sklearn.datasets"
       ]
     },
     "data_cleaning": {
       "filename_patterns": [
-        "clean", "prep", "preprocess", "sanitize"
+        "clean",
+        "prep",
+        "preprocess",
+        "sanitize"
       ],
       "keywords": [
         "dropna",
@@ -115,7 +131,6 @@
       "imports": [
         "sklearn.preprocessing",
         "sklearn.feature_extraction",
-        
         "sklearn.decomposition",
         "sklearn.feature_selection",
         "category_encoders",
@@ -170,7 +185,12 @@
     },
     "model_evaluation": {
       "filename_patterns": [
-        "eval", "test", "assess", "metric", "score", "validate"
+        "eval",
+        "test",
+        "assess",
+        "metric",
+        "score",
+        "validate"
       ],
       "keywords": [
         "accuracy_score",
@@ -184,7 +204,8 @@
         "model.predict"
       ],
       "imports": [
-        "sklearn.metrics", "mlflow"
+        "sklearn.metrics",
+        "mlflow"
       ]
     }
   }

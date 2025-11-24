@@ -1,7 +1,7 @@
 import os
 import shutil
 import uuid
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 
 from session.file_handler import FileHandler
 from analyzers.factory import AnalyzerFactory
@@ -17,6 +17,7 @@ class SessionManager:
     def __init__(
         self, 
         app_zip: Optional[bytes] = None,
+        git_url: Optional[str] = None,
         session_id: Optional[str] = None,
         analyzer_types: Optional[List[str]] = None,
         base_path: str = "/tmp"
@@ -25,20 +26,26 @@ class SessionManager:
         Initialize SessionManager.
         
         Args:
-            app_zip: ZIP file content (for new sessions)
+            app_zip: ZIP file content (for new sessions from ZIP)
+            git_url: Git repository URL (for new sessions from Git)
             session_id: Existing session ID (for loading sessions)
             analyzer_types: List of analyzer types to use
             base_path: Base path for session storage
         """
-        if app_zip is not None and session_id is not None:
-            raise ValueError("Cannot provide both app_zip and session_id")
+        # Validation: check mutual exclusivity
+        sources_provided = sum([app_zip is not None, git_url is not None, session_id is not None])
         
-        if app_zip is None and session_id is None:
-            raise ValueError("Must provide either app_zip or session_id")
+        if sources_provided == 0:
+            raise ValueError("Must provide either app_zip, git_url, or session_id")
+        
+        if sources_provided > 1:
+            raise ValueError("Cannot provide multiple sources. Choose one: app_zip, git_url, or session_id")
         
         self.base_path = base_path
         self.analyzer_types = analyzer_types or []
         self.app_zip = app_zip
+        self.git_url = git_url
+        self.source_type = "zip" if app_zip else ("git" if git_url else None)
         self.local_path: Optional[str] = None
         self.metadata: Optional[Dict[str, Any]] = None
         
@@ -83,8 +90,9 @@ class SessionManager:
             Path to extracted files
         """
         try:
+            source = self.app_zip if self.source_type == "zip" else self.git_url
             local_path = self.file_handler.create_session_workspace(
-                self.session_id, self.app_zip
+                self.session_id, source, self.source_type
             )
             return local_path
         except Exception as e:

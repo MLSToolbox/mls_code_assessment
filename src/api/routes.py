@@ -4,7 +4,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from api.serializers import ResponseSerializer
 from api.services import UploadService, AnalysisService
-from api.validation import validate_zip_file
+from api.validation import validate_upload
 from analyzers.pipeline.pipeline_overrides import AnalysisRequest
 from core.exceptions import ValidationError
 import config.settings as config
@@ -12,16 +12,20 @@ import config.settings as config
 
 def create_routes(app: Flask) -> Flask:
 
-    @app.route(f'{config.settings.API_PREFIX}/upload-zip', methods=['POST'])
+    @app.route(f'{config.settings.API_PREFIX}/upload', methods=['POST'])
     @cross_origin()
-    def upload_zip():
+    def upload():
         """
-        Upload ZIP and get auto-detected pipeline.
+        Upload code source (ZIP file or Git repository) and get auto-detected pipeline.
+        
+        Accepts either:
+        - Form data with 'file': ZIP archive
+        - Form data with 'git_url': Git repository URL (must end with .git)
         
         Returns session_id, tree_structure, and auto_detected_pipeline.
         """
-        app_zip = validate_zip_file(request)
-        result = UploadService.process_upload(app_zip)
+        upload_data = validate_upload(request)
+        result = UploadService.process_upload(upload_data)
         return ResponseSerializer.success(result)
 
     @app.route(f'{config.settings.API_PREFIX}/analyze/<session_id>', methods=['POST'])

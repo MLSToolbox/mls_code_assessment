@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Tuple, Union
 from datetime import datetime
 from werkzeug.datastructures import FileStorage
 
@@ -18,12 +18,14 @@ class UploadService:
     """Handles ZIP upload and initial pipeline detection."""
     
     @staticmethod
-    def process_upload(app_zip: FileStorage) -> Dict[str, Any]:
+    def process_upload(upload_data: Tuple[str, Union[bytes, str]]) -> Dict[str, Any]:
         """
-        Process uploaded ZIP file and create session.
+        Process uploaded file (ZIP or Git URL) and create session.
         
         Args:
-            app_zip: Uploaded file from request
+            upload_data: Tuple of (source_type, content) where:
+                - source_type is "zip" or "git"
+                - content is bytes for ZIP or string URL for Git
             
         Returns:
             Dictionary with session_id, tree_structure, and auto_detected_pipeline
@@ -32,10 +34,21 @@ class UploadService:
             SessionError: If session creation fails
             Exception: For other processing errors
         """
-        session = SessionManager(
-            app_zip=app_zip,
-            base_path=config.settings.SESSION_BASE_PATH
-        )
+        source_type, content = upload_data
+        
+        # Create session with appropriate source
+        if source_type == "zip":
+            session = SessionManager(
+                app_zip=content,
+                base_path=config.settings.SESSION_BASE_PATH
+            )
+        elif source_type == "git":
+            session = SessionManager(
+                git_url=content,
+                base_path=config.settings.SESSION_BASE_PATH
+            )
+        else:
+            raise ValueError(f"Unknown source type: {source_type}")
         
         session.ensure_setup()
         
