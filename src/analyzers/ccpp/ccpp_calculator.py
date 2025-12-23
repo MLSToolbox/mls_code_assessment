@@ -1,34 +1,34 @@
 from typing import Dict, List, Set, Any
 
 
-class PFPCalculator:
+class CCPPCalculator:
     """
-    Calculator for Package Functional Purity (PFP) metrics.
+    Calculator for Package Functional Purity (CCPP) metrics.
     
-    Calculates PFP score based on:
+    Calculates CCPP score based on:
     1. ML content ratio (n_ml / n_total)
     2. Stage diversity penalty (cohesion factor CF)
     """
     
     def __init__(self, etapas_max: int = 6):
         """
-        Initialize PFP calculator.
+        Initialize CCPP calculator.
         
         Args:
             etapas_max: Maximum number of pipeline stages (updated to 6 stages)
         """
         self.etapas_max = etapas_max
     
-    def calculate_pfp(
+    def calculate_ccpp(
         self, 
         n_total: int, 
         n_ml: int, 
         unique_stages: int
     ) -> float:
         """
-        Calculate PFP score for a package.
+        Calculate CCPP score for a package.
         
-        Formula: PFP = (n_ml / n_total) × CF
+        Formula: CCPP = (n_ml / n_total) × CF
         where CF = 1 - ((n_stages - 1) / (ETAPAS_MAX - 1))
         
         Args:
@@ -37,50 +37,50 @@ class PFPCalculator:
             unique_stages: Number of unique pipeline stages detected
             
         Returns:
-            PFP score between 0 and 1
+            CCPP score between 0 and 1
         """
         if n_total == 0:
             return 0.0
         cf = 1.0
         if self.etapas_max > 1 and unique_stages > 1:
             cf = 1 - ((unique_stages - 1) / (self.etapas_max - 1))
-        pfp_score = (n_ml / n_total) * cf
+        ccpp_score = (n_ml / n_total) * cf
         
-        return round(pfp_score, 4)
+        return round(ccpp_score, 4)
     
-    def get_purity_level(self, pfp_score: float) -> str:
+    def get_purity_level(self, ccpp_score: float) -> str:
         """
-        Determines qualitative purity level from PFP score.
+        Determines qualitative purity level from CCPP score.
         
         Args:
-            pfp_score: PFP score (0-1)
+            ccpp_score: CCPP score (0-1)
             
         Returns:
             Purity level: "High", "Moderate", "Low", or "Very Low"
         """
-        if pfp_score > 0.8:
+        if ccpp_score > 0.8:
             return "High"
-        if pfp_score >= 0.6:
+        if ccpp_score >= 0.6:
             return "Moderate"
-        if pfp_score >= 0.4:
+        if ccpp_score >= 0.4:
             return "Low"
         return "Very Low"
     
-    def get_overall_quality(self, average_pfp: float) -> str:
+    def get_overall_quality(self, average_ccpp: float) -> str:
         """
-        Determines overall project quality based on average PFP.
+        Determines overall project quality based on average CCPP.
         
         Args:
-            average_pfp: Average PFP across all packages
+            average_ccpp: Average CCPP across all packages
             
         Returns:
             Quality level: "Excellent", "Good", "Fair", or "Critical"
         """
-        if average_pfp > 0.8:
+        if average_ccpp > 0.8:
             return "Excellent"
-        if average_pfp >= 0.6:
+        if average_ccpp >= 0.6:
             return "Good"
-        if average_pfp >= 0.4:
+        if average_ccpp >= 0.4:
             return "Fair"
         return "Critical"
     

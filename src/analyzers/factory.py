@@ -19,7 +19,7 @@ class AnalyzerFactory:
             from analyzers.radon_mi_analyzer import RadonMIAnalyzer
             from analyzers.pipeline.pipeline_analyzer import PipelineAnalyzer
             from analyzers.fpc import FPCAnalyzer
-            from analyzers.pfp import PFPAnalyzer
+            from analyzers.ccpp import CCPPAnalyzer
             from analyzers.file_structure_analyzer import FileStructureAnalyzer
             from analyzers.ml_content import MLContentAnalyzer
             from analyzers.lccml_analyzer import LCCMLAnalyzer
@@ -36,7 +36,7 @@ class AnalyzerFactory:
                 "radon_mi": RadonMIAnalyzer,
                 "pipeline": PipelineAnalyzer,
                 "fpc": FPCAnalyzer,
-                "pfp": PFPAnalyzer,
+                "ccpp": CCPPAnalyzer,
                 "file_structure": FileStructureAnalyzer,
                 "ml_content": MLContentAnalyzer,
                 "lccml": LCCMLAnalyzer,
