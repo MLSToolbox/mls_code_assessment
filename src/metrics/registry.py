@@ -352,6 +352,41 @@ METRICS_REGISTRY = {
         references=["Internal Definition - Graph Theory Applied to ML Package Structure"],
         category="cohesion"
     ),
+
+    "scpp": MetricMetadata(
+        metric_id="scpp",
+        name="Structural Coupling Package Pipeline",
+        description=(
+            "Measures structural coupling of a package based on shared pipeline resources "
+            "(datasets, models, configurations) between its modules and subpackages."
+        ),
+        formula=(
+            "SCPP(P) = (2 * sum(Q_ij)) / (m * (m - 1)), where m = number of direct nodes "
+            "(files/subpackages), and Q_ij = 1 if a pair shares pipeline resources."
+        ),
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.6", "acceptable": "0.4-0.6", "warning": "<0.4"},
+        interpretation={
+            "0.8-1.0": "Very High",
+            "0.6-0.8": "High",
+            "0.4-0.6": "Medium",
+            "0.2-0.4": "Low ",
+            "0.0-0.2": "Very Low "
+        },
+        references=["Internal Definition - SCPP"],
+        category="cohesion"
+    ),
+    "p-lcom": MetricMetadata(
+        metric_id="p-lcom",
+        name="Package Lack of Cohesion of Modules",
+        description="Measures package fragmentation by counting unconnected groups of modules sharing pipeline resources.",
+        formula="P-LCOM(P) = |ConnectedComponents(G)|",
+        interpretation={
+            "1": "High Cohesion (Single Group)",
+            ">1": "Low Cohesion (Multiple Groups)"
+        },
+        ideal_range={"min": 1, "max": 1, "optimal": "1", "acceptable": "1"},
+        category="cohesion"
+    )
 }
 
 

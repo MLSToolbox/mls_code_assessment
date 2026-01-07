@@ -30,7 +30,9 @@ class Settings:
         "ifc_m",
         "pmcr",
         "ifc_p",
-        "lpcml"
+        "lpcml",
+        "scpp",
+        "p-lcom"
     }
     
     # Valid pipeline stages

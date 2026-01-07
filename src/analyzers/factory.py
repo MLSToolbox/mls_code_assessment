@@ -29,6 +29,8 @@ class AnalyzerFactory:
             from analyzers.pmcr_analyzer import PMCRAnalyzer
             from analyzers.ifc_p_analyzer import IFCPAnalyzer
             from analyzers.lpcml_analyzer import LPCMLAnalyzer
+            from analyzers.scpp_analyzer import SCPPAnalyzer
+            from analyzers.plcom_analyzer import PLCOMAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
@@ -46,6 +48,8 @@ class AnalyzerFactory:
                 "pmcr": PMCRAnalyzer,
                 "ifc_p": IFCPAnalyzer,
                 "lpcml": LPCMLAnalyzer,
+                "scpp": SCPPAnalyzer,
+                "p-lcom": PLCOMAnalyzer,
             }
         return cls._analyzers
     
