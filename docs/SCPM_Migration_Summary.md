@@ -8,8 +8,9 @@
 Se ha migrado exitosamente la métrica SCPM desde su implementación básica hacia una versión refinada con:
 - Detección explícita de tipos de datos compartidos (variables, archivos)
 - Análisis LCOM para detectar grupos desconectados
-- Sistema de evaluación basado en reglas (12 reglas)
-- Diagnóstico granular en 5 niveles
+- Identificación específica de métodos desconectados {f1, ..., fn}
+- Sistema de evaluación basado en reglas (14 reglas)
+- Diagnóstico granular en 5 niveles con recomendaciones cruzadas a FCPM
 
 ## Objetivo de la Migración
 
@@ -17,7 +18,8 @@ Mantener la fórmula LDSC existente pero **refinar qué se considera "compartir 
 1. Detección explícita de variables globales, constantes y atributos de clase
 2. Detección de archivos compartidos (datasets, modelos, configs)
 3. Análisis LCOM avanzado para recomendar divisiones de módulos
-4. Sistema de diagnóstico contextual basado en reglas
+4. Identificación específica de métodos completamente desconectados
+5. Sistema de diagnóstico contextual basado en reglas con recomendaciones cruzadas a FCPM
 
 ## Componentes Reutilizados de LCCML
 
@@ -85,6 +87,14 @@ def _count_components(self, adjacency: Dict, methods: List) -> int:
         Módulo contiene X grupos independientes
         → Recomendar dividir en X módulos separados
     """
+
+def _identify_disconnected_methods(self, adjacency: Dict, methods: List) -> List[str]:
+    """
+    Identifica métodos sin conexiones a ningún otro método.
+    
+    Retorna lista específica {f1, ..., fn} de funciones desconectadas
+    para diagnóstico preciso y recomendaciones dirigidas.
+    """
 ```
 
 #### Clasificación de Tipo de Compartición (Nueva)
@@ -106,18 +116,20 @@ Similar al patrón de `CCPMEvaluator`:
 ```python
 class SCPMEvaluator:
     """
-    Evalúa métricas SCPM contra 12 reglas contextuales.
+    Evalúa métricas SCPM contra 14 reglas contextuales.
     
     Considera:
     - cohesion_level: very_low | low | medium | high | very_high
     - n_components: Número de grupos desconectados (LCOM)
+    - n_disconnected_methods: Número de métodos sin conexiones
+    - disconnected_methods: Lista específica de métodos desconectados
     - shared_variable_count: Conteo de variables compartidas
     - shared_file_count: Conteo de archivos compartidos
     - shared_type: class_attributes | global_variables | files | mixed
     """
 ```
 
-### 4. scpm_rules.json - 12 Reglas de Diagnóstico
+### 4. scpm_rules.json - 14 Reglas de Diagnóstico
 
 Ejemplos de reglas implementadas:
 
@@ -130,6 +142,19 @@ Ejemplos de reglas implementadas:
   },
   "diagnosis_template": "Very low cohesion with {n_components} disconnected groups",
   "recommendation_template": "Split into {n_components} separate modules",
+  "severity": "critical"
+}
+```
+
+**Regla 2 - Crítica con métodos desconectados (Nueva):**
+```json
+{
+  "conditions": {
+    "cohesion_level": "very_low",
+    "n_disconnected_methods": ">0"
+  },
+  "diagnosis_template": "Very low cohesion. {disconnected_methods_str} are completely disconnected",
+  "recommendation_template": "Review FCPM for {disconnected_methods_str} to determine if they share functional purpose",
   "severity": "critical"
 }
 ```
@@ -158,6 +183,22 @@ Ejemplos de reglas implementadas:
 | [0.0-0.2) | very_low | Métodos independientes |
 
 ### 6. Métricas Exportadas
+
+```python
+file_result = {
+    "scpm": 0.75,                              # Cohesión estructural [0-1]
+    "cohesion_level": "high",                  # very_low|low|medium|high|very_high
+    "n_methods": 8,
+    "n_components": 1,                         # Grupos desconectados (LCOM)
+    "n_disconnected_methods": 0,               # Métodos sin conexiones
+    "disconnected_methods": [],                # Lista específica de métodos desconectados
+    "shared_variable_count": 5,
+    "shared_file_count": 2,
+    "shared_vars": ["self.model", "CONFIG"],
+    "shared_files": ["train_data.csv"],
+    "shared_type": "mixed"
+}
+```
 
 ```python
 {
@@ -249,6 +290,8 @@ POST /api/analyze
 ## Próximos Pasos
 
 - [x] ✅ Migración completada
+- [x] ✅ Identificación de métodos desconectados implementada
+- [x] ✅ Recomendaciones cruzadas con FCPM agregadas
 - [ ] 🔄 Testing en código real de ML pipelines
 - [ ] 📊 Validar heurísticas de detección de globales
 - [ ] 🔍 Refinar reglas según feedback de uso
@@ -288,9 +331,11 @@ SCPM es subset de LCCML, enfocado únicamente en cohesión de datos.
 La migración de SCPM fue exitosa, manteniendo la fórmula LDSC existente pero agregando:
 - ✅ Detección explícita y robusta de datos compartidos
 - ✅ Análisis LCOM para detectar anti-patterns
-- ✅ Sistema de evaluación basado en 12 reglas
+- ✅ Identificación específica de métodos desconectados {f1, ..., fn}
+- ✅ Sistema de evaluación basado en 14 reglas
 - ✅ Diagnóstico granular en 5 niveles
+- ✅ Recomendaciones cruzadas con FCPM para métodos desconectados
 - ✅ Documentación exhaustiva con ejemplos de cálculo
 - ✅ Consistencia arquitectónica con CCPM
 
-La métrica ahora proporciona insights accionables sobre la cohesión estructural de módulos ML.
+La métrica ahora proporciona insights accionables sobre la cohesión estructural de módulos ML, identificando específicamente qué métodos requieren revisión funcional mediante FCPM.

@@ -206,6 +206,9 @@ class SCPMAnalyzer(BaseAnalyzer):
         # LCOM analysis: find disconnected components
         n_components = self._count_components(adjacency, method_names)
         
+        # Identify completely disconnected methods (don't share with ANY other method)
+        disconnected_methods = self._identify_disconnected_methods(adjacency, method_names)
+        
         # Determine type of sharing
         shared_type = self._determine_shared_type(all_shared_vars, all_shared_files)
         
@@ -220,6 +223,8 @@ class SCPMAnalyzer(BaseAnalyzer):
             'shared_pairs': shared_pair_list,
             'cohesion_level': cohesion_level,
             'n_components': n_components,
+            'disconnected_methods': disconnected_methods,  # NEW: Methods with no connections
+            'n_disconnected_methods': len(disconnected_methods),  # NEW: Count
             'shared_variable_count': len(all_shared_vars),
             'shared_file_count': len(all_shared_files),
             'shared_vars': sorted(list(all_shared_vars))[:10],  # Top 10 for reporting
@@ -263,6 +268,25 @@ class SCPMAnalyzer(BaseAnalyzer):
                 n_components += 1
         
         return n_components
+    
+    def _identify_disconnected_methods(self, adjacency: Dict[str, Set[str]], methods: List[str]) -> List[str]:
+        """
+        Identify methods that are completely disconnected (share nothing with any other method).
+        
+        These are methods where adjacency[method] is empty (no edges in the graph).
+        
+        Args:
+            adjacency: Graph where adjacency[method_a] = {method_b, method_c, ...}
+            methods: List of all method names
+            
+        Returns:
+            List of method names that don't share data/files with any other method
+        """
+        disconnected = []
+        for method in methods:
+            if len(adjacency[method]) == 0:
+                disconnected.append(method)
+        return disconnected
     
     def _determine_shared_type(self, shared_vars: Set[str], shared_files: Set[str]) -> str:
         """

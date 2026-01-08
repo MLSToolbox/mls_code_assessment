@@ -223,6 +223,7 @@ METRICS_REGISTRY = {
             "  - Check if they share files: files_i ∩ files_j ≠ ∅\n"
             "  - If either is true: P_ij = 1\n"
             "• _count_components(): LCOM analysis using DFS to find disconnected method groups\n"
+            "• _identify_disconnected_methods(): Identifies methods with no connections to other methods\n"
             "• _determine_shared_type(): Classify sharing as class_attributes (>50%), global_variables (>50%),\n"
             "                           files (>50%), or mixed\n\n"
             "Cohesion levels:\n"
@@ -231,9 +232,10 @@ METRICS_REGISTRY = {
             "• medium (0.4-0.59): Moderate data sharing\n"
             "• low (0.2-0.39): Weak structural connections\n"
             "• very_low (0.0-0.19): Methods operate independently, minimal data sharing\n\n"
-            "LCOM Enhancement: If n_components > 1, module contains disconnected groups → should split into separate modules.\n\n"
-            "Evaluation (scpm_evaluator.py): Matches metrics against scpm_rules.json (12 rules) considering:\n"
-            "- Cohesion level, n_components, shared_variable_count, shared_file_count, shared_type"
+            "LCOM Enhancement: If n_components > 1, module contains disconnected groups → should split into separate modules.\n"
+            "Disconnected Methods: Methods with no connections are explicitly identified ({f1, ..., fn}) for targeted recommendations.\n\n"
+            "Evaluation (scpm_evaluator.py): Matches metrics against scpm_rules.json (14 rules) considering:\n"
+            "- Cohesion level, n_components, n_disconnected_methods, shared_variable_count, shared_file_count, shared_type"
         ),
         ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
         interpretation={

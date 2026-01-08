@@ -42,6 +42,8 @@ class SCPMEvaluator:
                 - cohesion_level: str
                 - n_methods: int
                 - n_components: int (from LCOM analysis)
+                - n_disconnected_methods: int (methods with no connections)
+                - disconnected_methods: List[str] (names of disconnected methods)
                 - shared_variable_count: int
                 - shared_file_count: int
                 - shared_type: str (class_attributes, global_variables, files, mixed)
@@ -71,6 +73,7 @@ class SCPMEvaluator:
         - cohesion_level: exact match ("very_low", "low", etc.)
         - n_methods: comparison (">1", "==1", etc.)
         - n_components: comparison (">1", "==1", etc.)
+        - n_disconnected_methods: comparison (">0", etc.)
         - shared_file_count: comparison (">0", etc.)
         - shared_variable_count: comparison (">0", etc.)
         - shared_type: exact match ("class_attributes", "global_variables", etc.)
@@ -143,6 +146,8 @@ class SCPMEvaluator:
         - {scpm}: SCPM score (formatted to 2 decimal places)
         - {n_methods}: Number of methods
         - {n_components}: Number of disconnected components
+        - {n_disconnected_methods}: Number of completely disconnected methods
+        - {disconnected_methods_str}: Comma-separated list of disconnected methods
         - {shared_variable_count}: Count of shared variables
         - {shared_file_count}: Count of shared files
         - {shared_vars_str}: Comma-separated list of shared variables
@@ -151,12 +156,27 @@ class SCPMEvaluator:
         # Extract module name from file path
         module_name = os.path.splitext(os.path.basename(file_path))[0]
         
+        # Format disconnected methods list
+        disconnected_methods = metrics.get('disconnected_methods', [])
+        if disconnected_methods:
+            # Format: "method1, method2 and method3" or just "method1"
+            if len(disconnected_methods) == 1:
+                disconnected_methods_str = disconnected_methods[0]
+            elif len(disconnected_methods) == 2:
+                disconnected_methods_str = f"{disconnected_methods[0]} and {disconnected_methods[1]}"
+            else:
+                disconnected_methods_str = ', '.join(disconnected_methods[:-1]) + f' and {disconnected_methods[-1]}'
+        else:
+            disconnected_methods_str = ''
+        
         # Prepare template context
         context = {
             'module_name': module_name,
             'scpm': metrics.get('scpm', 0.0),
             'n_methods': metrics.get('n_methods', 0),
             'n_components': metrics.get('n_components', 1),
+            'n_disconnected_methods': metrics.get('n_disconnected_methods', 0),
+            'disconnected_methods_str': disconnected_methods_str,
             'shared_variable_count': metrics.get('shared_variable_count', 0),
             'shared_file_count': metrics.get('shared_file_count', 0),
             'shared_vars_str': ', '.join(metrics.get('shared_vars', [])[:3]),  # Show first 3

@@ -103,11 +103,13 @@ $$SCPM(M) = \frac{2 \times \sum_{i<j} P_{ij}}{n \times (n - 1)}$$
 - **Análisis LCOM (Lack of Cohesion of Methods):**
   - Detecta **grupos desconectados** de métodos mediante análisis de grafos (DFS)
   - Si `n_components > 1`: El módulo contiene X grupos independientes → Recomienda dividir en X módulos separados
+  - **Identificación de métodos desconectados:** Lista específica {f1, ..., fn} de funciones sin conexiones
 
 - **Sistema de Evaluación:**
-  - **12 reglas** en `scpm_rules.json` para diagnóstico contextual
-  - Considera: `cohesion_level`, `n_components`, `shared_variable_count`, `shared_file_count`, `shared_type`
+  - **14 reglas** en `scpm_rules.json` para diagnóstico contextual
+  - Considera: `cohesion_level`, `n_components`, `n_disconnected_methods`, `shared_variable_count`, `shared_file_count`, `shared_type`
   - Genera diagnósticos y recomendaciones específicas por archivo
+  - **Recomendaciones cruzadas con FCPM:** Para métodos desconectados, sugiere verificar cohesión funcional
 
 - **Interpretación:**
   - **Very High/High:** Excelente cohesión estructural, métodos bien conectados por datos compartidos
@@ -116,11 +118,14 @@ $$SCPM(M) = \frac{2 \times \sum_{i<j} P_{ij}}{n \times (n - 1)}$$
 
 - **Recomendaciones de Refactorización:**
   1. **LCOM > 1:** Dividir módulo en `n_components` módulos separados (uno por grupo conectado)
-  2. **Very Low sin componentes:** Mejorar compartición usando:
+  2. **Métodos desconectados identificados:** Para cada función {f1, ..., fn} sin conexiones estructurales:
+     - Verificar FCPM (cohesión funcional) para determinar si tienen relación conceptual
+     - Si también tienen baja FCPM: mover a módulos más relacionados
+  3. **Very Low sin componentes:** Mejorar compartición usando:
      - Atributos de instancia (`self.x`) en clases
      - Variables globales del módulo en código funcional
      - Pasar datos explícitamente como parámetros
-  3. **Low cohesión:** Agrupar métodos que operan sobre los mismos datasets/modelos
+  4. **Low cohesión:** Agrupar métodos que operan sobre los mismos datasets/modelos
 
 - **Diferencias con LCCML:**
   - **SCPM:** Solo aspectos estructurales (variables + archivos)
@@ -130,7 +135,7 @@ $$SCPM(M) = \frac{2 \times \sum_{i<j} P_{ij}}{n \times (n - 1)}$$
 - **Archivos:**
   - `src/analyzers/scpm_analyzer.py` - Analizador principal migrado
   - `src/analyzers/scpm/scpm_evaluator.py` - Evaluador basado en reglas
-  - `src/analyzers/scpm/scpm_rules.json` - 12 reglas de diagnóstico
+  - `src/analyzers/scpm/scpm_rules.json` - 14 reglas de diagnóstico
 
 ---
 
