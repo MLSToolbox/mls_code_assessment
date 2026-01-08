@@ -68,44 +68,69 @@ Las siguientes métricas están completamente implementadas y operativas:
 
 ### **Structural Cohesion of Pipeline Modules - SCPM**
 
-**Estado:** ✅ Implementado
+**Estado:** ✅ Implementado y Migrado
 
 - **Tipo:** Estructural
-- **Definición:** Mide cuánto están relacionadas las funciones de un módulo o clase desde el punto de vista de los datos y modelos del pipeline que comparten.
+- **Definición:** Mide cuánto están relacionadas las funciones de un módulo desde el punto de vista de los **datos y estructuras** que comparten. Enfoque exclusivamente estructural, sin considerar invocaciones funcionales.
+
 - **Cálculo / Condición:** Detecta si las funciones comparten:
-  - Variables globales
-  - Constantes
-  - Atributos de clase
-  - Datasets (archivos .csv, .parquet, etc.)
-  - Modelos (archivos .pkl, .h5, .joblib, etc.)
-  - Configuraciones
+  - **Variables:**
+    - Atributos de clase (`self.x`)
+    - Variables globales del módulo (convención UPPERCASE o `_private`)
+    - Constantes (UPPERCASE naming)
+  - **Archivos:**
+    - Datasets: `.csv`, `.json`, `.parquet`, `.xlsx`, `.tsv`, `.feather`, `.arrow`, etc.
+    - Modelos ML: `.pkl`, `.joblib`, `.h5`, `.pt`, `.pth`, `.ckpt`, `.pb`, `.onnx`, etc.
+    - Configuraciones: `.yaml`, `.yml`, `.ini`, `.cfg`, `.toml`, etc.
 
 - **Fórmula:**
 $$SCPM(M) = \frac{2 \times \sum_{i<j} P_{ij}}{n \times (n - 1)}$$
 
-  Donde $P_{ij} = 1$ si las funciones $i$ y $j$ comparten al menos un recurso estructural.
+  Donde:
+  - $P_{ij} = 1$ si las funciones $i$ y $j$ comparten al menos una **variable** O un **archivo**
+  - $n$ = número de métodos/funciones en el módulo
 
-- **Rangos de Diagnóstico:**
+- **Rangos de Diagnóstico (5 niveles granulares):**
 
-| Rango | Nivel |
-| :--- | :--- |
-| [0.8 - 1.0] | Very High |
-| [0.6 - 0.8) | High |
-| [0.4 - 0.6) | Medium |
-| [0.2 - 0.4) | Low |
-| [0.0 - 0.2) | Very Low |
+| Rango | Nivel | Descripción |
+| :--- | :--- | :--- |
+| [0.8 - 1.0] | Very High | Casi todos los pares de métodos comparten datos |
+| [0.6 - 0.8) | High | Fuerte compartición de datos entre métodos |
+| [0.4 - 0.6) | Medium | Compartición moderada de datos |
+| [0.2 - 0.4) | Low | Conexiones estructurales débiles |
+| [0.0 - 0.2) | Very Low | Métodos operan independientemente |
+
+- **Análisis LCOM (Lack of Cohesion of Methods):**
+  - Detecta **grupos desconectados** de métodos mediante análisis de grafos (DFS)
+  - Si `n_components > 1`: El módulo contiene X grupos independientes → Recomienda dividir en X módulos separados
+
+- **Sistema de Evaluación:**
+  - **12 reglas** en `scpm_rules.json` para diagnóstico contextual
+  - Considera: `cohesion_level`, `n_components`, `shared_variable_count`, `shared_file_count`, `shared_type`
+  - Genera diagnósticos y recomendaciones específicas por archivo
 
 - **Interpretación:**
-  - **Very High/High:** Funciones están fuertemente acopladas por recursos compartidos (buena cohesión estructural)
-  - **Medium:** Cohesión moderada, algunas funciones comparten recursos
-  - **Low/Very Low:** Funciones operan independientemente, poca compartición de recursos
+  - **Very High/High:** Excelente cohesión estructural, métodos bien conectados por datos compartidos
+  - **Medium:** Cohesión aceptable, algunas oportunidades de mejora
+  - **Low/Very Low:** Métodos operan independientemente, probable violación del SRP
 
 - **Recomendaciones de Refactorización:**
-  1. **Caso General:** Si las funciones no se invocan entre sí (baja FCPM) pero tienen baja SCPM, considerar moverlas a otros módulos
-  2. **Caso Avanzado (LCOM):** Si se detectan X grupos conectados estructuralmente pero no funcionalmente, dividir el módulo en X módulos más pequeños
+  1. **LCOM > 1:** Dividir módulo en `n_components` módulos separados (uno por grupo conectado)
+  2. **Very Low sin componentes:** Mejorar compartición usando:
+     - Atributos de instancia (`self.x`) en clases
+     - Variables globales del módulo en código funcional
+     - Pasar datos explícitamente como parámetros
+  3. **Low cohesión:** Agrupar métodos que operan sobre los mismos datasets/modelos
+
+- **Diferencias con LCCML:**
+  - **SCPM:** Solo aspectos estructurales (variables + archivos)
+  - **LCCML:** Aspectos estructurales + funcionales (variables + archivos + llamadas a métodos + funciones ML compartidas)
+  - SCPM es subset de LCCML enfocado en cohesión de datos
 
 - **Archivos:**
-  - `src/analyzers/scpm_analyzer.py` - Analizador de cohesión estructural
+  - `src/analyzers/scpm_analyzer.py` - Analizador principal migrado
+  - `src/analyzers/scpm/scpm_evaluator.py` - Evaluador basado en reglas
+  - `src/analyzers/scpm/scpm_rules.json` - 12 reglas de diagnóstico
 
 ---
 

@@ -1,0 +1,124 @@
+{
+  "rules": [
+    {
+      "id": 1,
+      "conditions": {
+        "cohesion_level": "very_low",
+        "n_methods": ">1",
+        "n_components": ">1"
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is very low (SCPM: {scpm:.2f}). Methods share almost no data structures. The module has {n_components} disconnected groups of methods.",
+      "recommendation_template": "Split the {module_name} module into {n_components} separate modules, one for each disconnected group. Each group represents a cohesive unit that should be in its own file.",
+      "severity": "critical"
+    },
+    {
+      "id": 2,
+      "conditions": {
+        "cohesion_level": "very_low",
+        "n_methods": ">1",
+        "n_components": 1
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is very low (SCPM: {scpm:.2f}). Methods share almost no data structures or common state.",
+      "recommendation_template": "The {module_name} module should be refactored. Consider: 1) Pass data explicitly as parameters instead of relying on implicit sharing, 2) Extract shared data into a class with methods operating on instance variables (self.x), 3) Use module-level global variables for shared configuration/datasets.",
+      "severity": "high"
+    },
+    {
+      "id": 3,
+      "conditions": {
+        "cohesion_level": "low",
+        "n_methods": ">1",
+        "n_components": ">1"
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is low (SCPM: {scpm:.2f}). The module has {n_components} weakly connected groups.",
+      "recommendation_template": "Consider splitting the {module_name} module into {n_components} separate modules to improve organization and maintainability.",
+      "severity": "high"
+    },
+    {
+      "id": 4,
+      "conditions": {
+        "cohesion_level": "low",
+        "n_methods": ">1",
+        "n_components": 1
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is low (SCPM: {scpm:.2f}). Methods have weak structural connections through shared data.",
+      "recommendation_template": "Improve data sharing by: 1) Grouping related methods that operate on the same datasets/models, 2) Using class instance variables (self.x) for shared state, 3) Creating module-level constants for shared configuration.",
+      "severity": "medium"
+    },
+    {
+      "id": 5,
+      "conditions": {
+        "cohesion_level": "medium",
+        "shared_file_count": ">0"
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is medium (SCPM: {scpm:.2f}). Methods share {shared_file_count} data/model files.",
+      "recommendation_template": "Good progress - methods are connected through shared files ({shared_files_str}). Consider also using shared variables or class attributes to improve cohesion further.",
+      "severity": "info"
+    },
+    {
+      "id": 6,
+      "conditions": {
+        "cohesion_level": "medium",
+        "shared_variable_count": ">0"
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is medium (SCPM: {scpm:.2f}). Methods share {shared_variable_count} variables/attributes.",
+      "recommendation_template": "Methods are reasonably connected through shared variables ({shared_vars_str}). To reach high cohesion, ensure all methods operate on common data structures or consider splitting into more focused modules.",
+      "severity": "info"
+    },
+    {
+      "id": 7,
+      "conditions": {
+        "cohesion_level": "medium"
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is medium (SCPM: {scpm:.2f}). There is moderate data sharing between methods.",
+      "recommendation_template": "The module has acceptable structural cohesion. Consider minor refactoring to group methods that share more data structures together.",
+      "severity": "info"
+    },
+    {
+      "id": 8,
+      "conditions": {
+        "cohesion_level": "high",
+        "shared_type": "class_attributes"
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is high (SCPM: {scpm:.2f}). Methods are well-connected through class attributes.",
+      "recommendation_template": "Excellent - the module follows good OOP principles with methods operating on shared instance state (self.x).",
+      "severity": "info"
+    },
+    {
+      "id": 9,
+      "conditions": {
+        "cohesion_level": "high",
+        "shared_type": "global_variables"
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is high (SCPM: {scpm:.2f}). Functions are well-connected through module-level global variables.",
+      "recommendation_template": "Good - functions share common data through module-level variables. This is appropriate for functional/script-style code.",
+      "severity": "info"
+    },
+    {
+      "id": 10,
+      "conditions": {
+        "cohesion_level": "high"
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is high (SCPM: {scpm:.2f}). Methods/functions share significant data structures.",
+      "recommendation_template": "Excellent structural organization. Methods are well-connected through shared data.",
+      "severity": "info"
+    },
+    {
+      "id": 11,
+      "conditions": {
+        "cohesion_level": "very_high"
+      },
+      "diagnosis_template": "The structural cohesion of the {module_name} module is very high (SCPM: {scpm:.2f}). Almost all methods/functions share common data structures.",
+      "recommendation_template": "Excellent - this module demonstrates optimal structural cohesion with highly interconnected methods.",
+      "severity": "info"
+    },
+    {
+      "id": 12,
+      "conditions": {
+        "cohesion_level": "not_applicable"
+      },
+      "diagnosis_template": "SCPM metric is not applicable for {module_name} (only {n_methods} method).",
+      "recommendation_template": "No action needed. SCPM requires at least 2 methods to measure cohesion.",
+      "severity": "info"
+    }
+  ]
+}

@@ -197,22 +197,53 @@ METRICS_REGISTRY = {
         metric_id="scpm",
         name="Structural Cohesion of Pipeline Modules",
         description=(
-            "Measures how much functions within a module share data or structures. "
-            "High values indicate that functions are tightly coupled through shared data."
+            "Measures how much functions within a module share DATA or STRUCTURES. "
+            "Higher values indicate that methods are tightly coupled through shared data access, "
+            "which suggests good structural cohesion. Focuses on structural connections only "
+            "(variables and files), excluding functional connections (method calls)."
         ),
         formula=(
-            "LDSC = (2 * sum(P_ij)) / (n * (n-1)), where P_ij = 1 if functions i and j "
-            "share at least one significant variable or data structure."
+            "SCPM = (2 × sum(P_ij)) / (n × (n-1))\n"
+            "where P_ij = 1 if functions i and j share at least one:\n"
+            "• Class attributes (self.x)\n"
+            "• Module-level global variables (UPPERCASE or _private)\n"
+            "• Constants (UPPERCASE naming convention)\n"
+            "• Data files (datasets: .csv, .parquet, .json, .xlsx, etc.)\n"
+            "• Model files (.pkl, .h5, .pt, .ckpt, etc.)\n"
+            "• Config files (.yaml, .yml, .ini, .cfg, etc.)\n\n"
+            "Calculation steps in scpm_analyzer.py:\n"
+            "• _extract_methods(): Extracts all functions and class methods from AST\n"
+            "• _get_variables_accessed(): Detects self.x and module-level globals using enhanced heuristics:\n"
+            "  - Includes: UPPERCASE (>1 char), _private, common ML globals (data, model, X_train, etc.)\n"
+            "  - Excludes: builtins (list, dict, str), imports (pd, np, os), ML types (DataFrame, Tensor, ndarray),\n"
+            "              common locals (result, temp, i, j), type suffixes (Type, Class, Error)\n"
+            "• _get_files_accessed(): Scans for string literals with 19 ML file extensions\n"
+            "• For each pair of methods (i, j):\n"
+            "  - Check if they share variables: vars_i ∩ vars_j ≠ ∅\n"
+            "  - Check if they share files: files_i ∩ files_j ≠ ∅\n"
+            "  - If either is true: P_ij = 1\n"
+            "• _count_components(): LCOM analysis using DFS to find disconnected method groups\n"
+            "• _determine_shared_type(): Classify sharing as class_attributes (>50%), global_variables (>50%),\n"
+            "                           files (>50%), or mixed\n\n"
+            "Cohesion levels:\n"
+            "• very_high (0.8-1.0): Almost all method pairs share data\n"
+            "• high (0.6-0.79): Most methods share data, good structural organization\n"
+            "• medium (0.4-0.59): Moderate data sharing\n"
+            "• low (0.2-0.39): Weak structural connections\n"
+            "• very_low (0.0-0.19): Methods operate independently, minimal data sharing\n\n"
+            "LCOM Enhancement: If n_components > 1, module contains disconnected groups → should split into separate modules.\n\n"
+            "Evaluation (scpm_evaluator.py): Matches metrics against scpm_rules.json (12 rules) considering:\n"
+            "- Cohesion level, n_components, shared_variable_count, shared_file_count, shared_type"
         ),
         ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
         interpretation={
-            "0.8-1.0": "Excellent - Maximum structural cohesion",
-            "0.6-0.79": "Good - High data sharing",
-            "0.4-0.59": "Moderate - Some data sharing",
-            "0.2-0.39": "Low - Little data sharing",
-            "0.0-0.19": "Very Low - Minimal structural cohesion"
+            "very_high (0.8-1.0)": "Excellent - Maximum structural cohesion, methods highly interconnected through shared data",
+            "high (0.6-0.79)": "Good - Strong data sharing between methods, well-organized module",
+            "medium (0.4-0.59)": "Moderate - Some data sharing exists, consider improving organization",
+            "low (0.2-0.39)": "Poor - Weak structural connections, methods operate too independently",
+            "very_low (0.0-0.19)": "Critical - Minimal data sharing, module likely violates SRP, needs refactoring"
         },
-        references=["Internal Definition"],
+        references=["LDSC - Local Data Structure Cohesion (Internal Definition)"],
         category="cohesion"
     ),
 

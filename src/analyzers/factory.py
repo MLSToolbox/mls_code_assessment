@@ -22,7 +22,7 @@ class AnalyzerFactory:
             from analyzers.file_structure_analyzer import FileStructureAnalyzer
             from analyzers.ml_content import MLContentAnalyzer
             from analyzers.lccml_analyzer import LCCMLAnalyzer
-            from analyzers.scpm_analyzer import SCPMAnalyzer
+            from analyzers.scpm import SCPMAnalyzer
             from analyzers.fcpm_analyzer import FCPMAnalyzer
             
             cls._analyzers = {
