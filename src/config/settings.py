@@ -3,9 +3,6 @@ from typing import Literal, Set
 
 
 class Settings:
-    """Application configuration settings."""
-    
-    
     # Server settings
     HOST: str = os.getenv('HOST', '0.0.0.0')
     PORT: int = int(os.getenv('PORT', '5060'))
@@ -20,17 +17,12 @@ class Settings:
         "radon_cc",
         "radon_mi",
         "pipeline",
-        "fpc",
-        "pfp",
+        "ccpm",
         "file_structure",
         "lccml",
         "ml_content",
-        "ldsc",
-        "pdsc",
-        "ifc_m",
-        "pmcr",
-        "ifc_p",
-        "lpcml"
+        "scpm",
+        "fcpm"
     }
     
     # Valid pipeline stages
@@ -73,7 +65,7 @@ class Settings:
             "max": "C",
             "show_complexity": True
         },
-        "fpc": {
+        "ccpm": {
             # Minimum number of lines of code for a file to be considered 
             # in cohesion evaluation. Files below this threshold will be 
             # analyzed but marked as "too_small" if they show low cohesion.
@@ -92,13 +84,12 @@ AnalyzerType = Literal[
     "radon_cc",
     "radon_mi",
     "pipeline",
-    "fpc",
-    "pfp",
+    "ccpm",
     "file_structure",
     "lccml",
     "ml_content",
-    "ldsc",
-    "ifc_m"
+    "scpm",
+    "fcpm"
 ]
 
 PipelineStage = Literal[

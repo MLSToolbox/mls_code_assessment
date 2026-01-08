@@ -6,25 +6,25 @@ from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 
 
-class LDSCAnalyzer(BaseAnalyzer):
+class SCPMAnalyzer(BaseAnalyzer):
     """
-    Analyzer for LDSC (Linked Data Structure Cohesion) metric.
+    Analyzer for SCPM (Structural Cohesion of Pipeline Modules) metric.
     
     Measures how much functions within a module share data or structures.
-    LDSC = (2 * sum(P_ij)) / (n * (n-1))
+    SCPM = (2 * sum(P_ij)) / (n * (n-1))
     where P_ij = 1 if functions i and j share at least one significant variable.
     """
     
     @property
     def analyzer_id(self) -> str:
-        return "ldsc"
+        return "scpm"
     
     def analyze(self) -> AnalysisResult:
         """
-        Analyze LDSC cohesion for all Python files.
+        Analyze SCPM cohesion for all Python files.
         
         Returns:
-            AnalysisResult with LDSC scores per file
+            AnalysisResult with SCPM scores per file
         """
         results = {
             'files': {},
@@ -36,14 +36,14 @@ class LDSCAnalyzer(BaseAnalyzer):
                 'low_cohesion': 0,       # 0.2-0.39
                 'very_low_cohesion': 0,  # 0.0-0.19
                 'single_method_files': 0, # Files with 0 or 1 method
-                'average_ldsc': 0.0
+                'average_scpm': 0.0
             }
         }
         
         python_files = self.context.get_python_files()
         results['summary']['total_files'] = len(python_files)
         
-        ldsc_scores = []
+        scpm_scores = []
         
         for py_file in python_files:
             tree = self.context.get_file_ast(py_file)
@@ -55,27 +55,27 @@ class LDSCAnalyzer(BaseAnalyzer):
             file_result = self._analyze_file(tree, py_file)
             results['files'][py_file] = file_result
             
-            self.context.set_file_metric(py_file, 'ldsc', file_result)
+            self.context.set_file_metric(py_file, 'scpm', file_result)
             
-            ldsc = file_result['ldsc']
-            if ldsc is None:
+            scpm = file_result['scpm']
+            if scpm is None:
                 results['summary']['single_method_files'] += 1
             else:
-                ldsc_scores.append(ldsc)
-                if ldsc >= 0.8:
+                scpm_scores.append(scpm)
+                if scpm >= 0.8:
                     results['summary']['high_cohesion'] += 1
-                elif ldsc >= 0.6:
+                elif scpm >= 0.6:
                     results['summary']['good_cohesion'] += 1
-                elif ldsc >= 0.4:
+                elif scpm >= 0.4:
                     results['summary']['moderate_cohesion'] += 1
-                elif ldsc >= 0.2:
+                elif scpm >= 0.2:
                     results['summary']['low_cohesion'] += 1
                 else:
                     results['summary']['very_low_cohesion'] += 1
         
-        if ldsc_scores:
-            results['summary']['average_ldsc'] = sum(ldsc_scores) / len(ldsc_scores)
-            score = results['summary']['average_ldsc'] * 10  # Scale to 0-10
+        if scpm_scores:
+            results['summary']['average_scpm'] = sum(scpm_scores) / len(scpm_scores)
+            score = results['summary']['average_scpm'] * 10  # Scale to 0-10
         else:
             score = 0
             
@@ -90,13 +90,13 @@ class LDSCAnalyzer(BaseAnalyzer):
         )
     
     def _analyze_file(self, tree: ast.Module, file_path: str) -> Dict:
-        """Analyze LDSC for a single file."""
+        """Analyze SCPM for a single file."""
         methods = self._extract_methods(tree)
         n_methods = len(methods)
         
         if n_methods <= 1:
             return {
-                'ldsc': None,
+                'scpm': None,
                 'n_methods': n_methods,
                 'n_possible_pairs': 0,
                 'n_shared_pairs': 0,
@@ -125,15 +125,15 @@ class LDSCAnalyzer(BaseAnalyzer):
                     shared_pairs += 1
                     shared_pair_list.append((method_a, method_b))
                     
-        ldsc = shared_pairs / total_pairs if total_pairs > 0 else 0
+        scpm = shared_pairs / total_pairs if total_pairs > 0 else 0
         
         return {
-            'ldsc': round(ldsc, 3),
+            'scpm': round(scpm, 3),
             'n_methods': n_methods,
             'n_possible_pairs': total_pairs,
             'n_shared_pairs': shared_pairs,
             'shared_pairs': shared_pair_list,
-            'cohesion_level': self._categorize_cohesion(ldsc)
+            'cohesion_level': self._categorize_cohesion(scpm)
         }
 
     def _extract_methods(self, tree: ast.Module) -> Dict[str, ast.FunctionDef]:
@@ -233,7 +233,7 @@ class LDSCAnalyzer(BaseAnalyzer):
         messages = []
         summary = results['summary']
         messages.append({
-            'diagnosis': f"Analyzed {summary['total_files']} files. Average LDSC: {summary['average_ldsc']:.2f}",
+            'diagnosis': f"Analyzed {summary['total_files']} files. Average SCPM: {summary['average_scpm']:.2f}",
             'recommendation': "Check individual files for details.",
             'severity': 'info'
         })
@@ -241,13 +241,13 @@ class LDSCAnalyzer(BaseAnalyzer):
         
         for file_path, data in results['files'].items():
             if data.get('cohesion_level') in ['low', 'very_low']:
-                ldsc = data['ldsc']
+                scpm = data['scpm']
                 messages.append({
                     'file': file_path,
-                    'diagnosis': f"Low structural cohesion (LDSC: {ldsc:.2f}). Functions share few data structures.",
+                    'diagnosis': f"Low structural cohesion (SCPM: {scpm:.2f}). Functions share few data structures.",
                     'recommendation': "Consider grouping functions that operate on the same data or passing data explicitly.",
                     'severity': 'medium' if data['cohesion_level'] == 'low' else 'high',
-                    'rule_id': 'ldsc_cohesion'
+                    'rule_id': 'scpm_cohesion'
                 })
                 
         return messages

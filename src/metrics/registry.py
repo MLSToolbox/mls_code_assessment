@@ -67,9 +67,9 @@ METRICS_REGISTRY = {
         category="quality"
     ),
     
-    "fpc": MetricMetadata(
-        metric_id="fpc",
-        name="Functional Pipeline Cohesion",
+    "ccpm": MetricMetadata(
+        metric_id="ccpm",
+        name="Conceptual Cohesion of Pipeline Modules",
         description=(
             "Measures cohesion of ML pipeline code by analyzing how well functions and classes "
             "are organized around specific ML pipeline stages. Higher cohesion indicates better "
@@ -78,17 +78,32 @@ METRICS_REGISTRY = {
             "files (loose code without functions) for pipeline stage alignment."
         ),
         formula=(
-            "FPC = Weighted average of cohesion levels. "
-            "High cohesion (10 pts): single stage. "
-            "Medium cohesion (6 pts): single phase, multiple stages. "
-            "Low cohesion (3 pts): multiple phases. "
-            "Script-style files are analyzed as a single unit for stage detection."
+            "CCPM uses a 5-level qualitative evaluation based on:\n"
+            "1. Pipeline stages detected (data_collection, data_cleaning, feature_engineering, model_training, model_evaluation)\n"
+            "2. Pipeline phases (data_engineering=[collection+cleaning], model_development=[feature+training+evaluation])\n"
+            "3. ML content purity (ml_content_only: True=only ML code, False=mixed with non-ML code)\n"
+            "4. Module size (NLOC threshold = 30 lines)\n\n"
+            "Calculation steps in ccpm_analyzer.py:\n"
+            "• _detect_stages(): Uses pipeline_stages.json to map keywords/imports/patterns → ML stages\n"
+            "• MLContentAnalyzer.analyze(): Detects non-ML code (GUI, web frameworks, utilities) using ml_content_config.json\n"
+            "• NLOCCalculator.calculate(): Counts non-comment lines of code\n"
+            "• _determine_cohesion_level(): Assigns qualitative level based on stages/phases/ml_content_only/nloc\n"
+            "• _calculate_cohesion_score(): Maps levels to numeric scores for aggregation\n\n"
+            "Cohesion levels (with point mapping):\n"
+            "• very_high (10 pts): 1 phase + 1 stage + ml_content_only=True\n"
+            "• high (8 pts): 1 phase + 1 stage + ml_content_only=False OR 1 phase + >1 stage + ml_content_only=True + NLOC≤30\n"
+            "• medium (5 pts): 1 phase + >1 stage + ml_content_only=False OR 1 phase + >1 stage + ml_content_only=True + NLOC>30\n"
+            "• low (3 pts): 2+ phases + ml_content_only=True\n"
+            "• very_low (1 pt): 2+ phases + ml_content_only=False\n\n"
+            "Evaluation (ccpm_evaluator.py): Matches calculated metrics against ccpm_rules.json (10 rules) to generate diagnosis and recommendations."
         ),
         ideal_range={"min": 0, "max": 10, "optimal": ">7.0", "acceptable": "5.0-7.0", "warning": "<5.0"},
         interpretation={
-            "high (7.0-10.0)": "Well-organized ML pipeline code with clear separation of concerns",
-            "medium (4.0-6.9)": "Code organization is acceptable but could benefit from better structure",
-            "low (0-3.9)": "Poorly organized code, consider restructuring around ML pipeline stages. Script-style files should be refactored into functions."
+            "very_high (10)": "Excellent - Single stage, pure ML code, optimal SRP compliance",
+            "high (8)": "Good - Single stage or phase with minor impurities or small multi-stage modules",
+            "medium (5)": "Moderate - Multiple stages in same phase or mixed ML/non-ML code",
+            "low (3)": "Poor - Multiple phases mixed, violates SRP, needs refactoring",
+            "very_low (1)": "Critical - Multiple phases + non-ML code mixed, severe SRP violation"
         },
         references=["https://github.com/MLS-Toobox/mls_code_generator"],
         category="cohesion"
@@ -178,9 +193,9 @@ METRICS_REGISTRY = {
         category="cohesion"
     ),
 
-    "ldsc": MetricMetadata(
-        metric_id="ldsc",
-        name="Linked Data Structure Cohesion",
+    "scpm": MetricMetadata(
+        metric_id="scpm",
+        name="Structural Cohesion of Pipeline Modules",
         description=(
             "Measures how much functions within a module share data or structures. "
             "High values indicate that functions are tightly coupled through shared data."
@@ -201,9 +216,9 @@ METRICS_REGISTRY = {
         category="cohesion"
     ),
 
-    "ifc_m": MetricMetadata(
-        metric_id="ifc_m",
-        name="Information Flow Cohesion - Modified",
+    "fcpm": MetricMetadata(
+        metric_id="fcpm",
+        name="Functional Cohesion of Pipeline Modules",
         description=(
             "Measures functional connection between functions via information flow. "
             "Considers direct method invocations and data flow (producer-consumer relationships)."
@@ -221,135 +236,6 @@ METRICS_REGISTRY = {
             "0.0-0.19": "Very Low - Functions operate independently"
         },
         references=["Internal Definition"],
-        category="cohesion"
-    ),
-    
-    "pfp": MetricMetadata(
-        metric_id="pfp",
-        name="Package Functional Purity",
-        description=(
-            "Measures how focused a package is on a specific ML pipeline function. Evaluates "
-            "the concentration of ML-related modules within a package and penalizes packages "
-            "that span multiple pipeline stages. Higher PFP indicates better package cohesion "
-            "and adherence to single responsibility principle."
-        ),
-        formula=(
-            "PFP = (n_ml / n_total) × CF, where CF = 1 - ((n_stages - 1) / (MAX_STAGES - 1)). "
-            "n_ml = ML modules in package, n_total = total modules, n_stages = unique stages detected, "
-            "CF = concentration factor that penalizes stage dispersion."
-        ),
-        ideal_range={
-            "min": 0.0,
-            "max": 1.0,
-            "optimal": ">0.8",
-            "acceptable": "0.6-0.8",
-            "warning": "<0.6"
-        },
-        interpretation={
-            "High (0.8-1.0)": "Excellent package purity - focused on single pipeline function with high ML content",
-            "Moderate (0.6-0.79)": "Acceptable purity - package is reasonably focused but has room for improvement",
-            "Low (0.4-0.59)": "Poor purity - package handles multiple stages or has low ML content, refactoring recommended",
-            "Very Low (0.0-0.39)": "Critical purity issues - package lacks clear purpose, immediate refactoring needed"
-        },
-        references=[
-            "https://github.com/MLS-Toobox/mls_code_generator",
-            "Single Responsibility Principle - Clean Code by Robert C. Martin"
-        ],
-        category="cohesion"
-    ),
-
-    "pdsc": MetricMetadata(
-        metric_id="pdsc",
-        name="Package Data Structure Cohesion",
-        description=(
-            "Measures the structural sharing of data or models between modules of the same package. "
-            "High values indicate that modules within a package are tightly coupled through shared resources."
-        ),
-        formula=(
-            "PDSC(P) = (2 * sum(Q_ij)) / (m * (m - 1)), where Q_ij = 1 if modules i and j "
-            "access or modify the same data structures or resources."
-        ),
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
-        interpretation={
-            "0.8-1.0": "Excellent - Maximum structural cohesion",
-            "0.6-0.79": "Good - High resource sharing",
-            "0.4-0.59": "Moderate - Some resource sharing",
-            "0.2-0.39": "Low - Little resource sharing",
-            "0.0-0.19": "Very Low - Minimal structural cohesion"
-        },
-        references=["Internal Definition"],
-        category="cohesion"
-    ),
-    
-    "pmcr": MetricMetadata(
-        metric_id="pmcr",
-        name="Package Module Cohesion Ratio",
-        description=(
-            "Measures the proportion of modules in a package that are interconnected, "
-            "considering both code dependencies and shared ML resources (datasets, models, APIs). "
-            "Adapts the Connected Pairs Ratio concept to the package level."
-        ),
-        formula=(
-            "PMCR(P) = Mc / (n(n-1)/2), where Mc = number of connected module pairs "
-            "(direct or indirect), n = total modules in package."
-        ),
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
-        interpretation={
-            "0.8-1.0": "Excellent - Highly cohesive package",
-            "0.6-0.79": "Good - Strong module interconnection",
-            "0.4-0.59": "Moderate - Some isolated modules",
-            "0.2-0.39": "Low - Many isolated modules",
-            "0.0-0.19": "Very Low - Fragmented package"
-        },
-        references=["Internal Definition"],
-        category="cohesion"
-    ),
-
-    "ifc_p": MetricMetadata(
-        metric_id="ifc_p",
-        name="Information Flow Cohesion - Package",
-        description=(
-            "Measures the functional cooperation between modules of a package via information flow. "
-            "Considers module invocations and data consumption (imports)."
-        ),
-        formula=(
-            "IFC-P(P) = (2 * sum(F_ij)) / (m * (m - 1)), where F_ij = 1 if module i invokes module j "
-            "or consumes its data."
-        ),
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
-        interpretation={
-            "0.8-1.0": "Excellent - High functional coupling within package",
-            "0.6-0.79": "Good - Modules are well connected",
-            "0.4-0.59": "Moderate - Some connections between modules",
-            "0.2-0.39": "Low - Few connections, loose package",
-            "0.0-0.19": "Very Low - Modules are independent"
-        },
-        references=["Internal Definition"],
-        category="cohesion"
-    ),
-    
-    "lpcml": MetricMetadata(
-        metric_id="lpcml",
-        name="Loose Package Cohesion Modified for ML",
-        description=(
-            "Measures the number of connected components within a package. "
-            "A connected component represents a group of modules related through "
-            "dependencies, shared data, model files, or ML library usage. "
-            "Lower values indicate better cohesion (ideally 1 component)."
-        ),
-        formula=(
-            "LPCML(P) = |CC(G_P)|, where G_P = (V, E) is the undirected dependency graph. "
-            "V = first-level elements (modules/subpackages), "
-            "E = edges exist when elements share resources (non-empty intersection)."
-        ),
-        ideal_range={"min": 1, "max": None, "optimal": "1", "acceptable": "2-3", "warning": ">3"},
-        interpretation={
-            "1": "Excellent - All modules form a single cohesive unit",
-            "2-3": "Acceptable - Package has few disconnected subgroups",
-            "4-5": "Moderate - Package fragmentation, consider reorganization",
-            ">5": "Poor - Highly fragmented package, refactoring needed"
-        },
-        references=["Internal Definition - Graph Theory Applied to ML Package Structure"],
         category="cohesion"
     ),
 }

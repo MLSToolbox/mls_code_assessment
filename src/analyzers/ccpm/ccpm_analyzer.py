@@ -6,19 +6,30 @@ from typing import Dict, List, Set
 from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.ml_content import MLContentAnalyzer
-from analyzers.fpc.nloc_calculator import NLOCCalculator
-from analyzers.fpc.fpc_evaluator import FPCEvaluator
+from analyzers.ccpm.nloc_calculator import NLOCCalculator
+from analyzers.ccpm.ccpm_evaluator import CCPMEvaluator
 from config.settings import settings
 
 
-class FPCAnalyzer(BaseAnalyzer):
+class CCPMAnalyzer(BaseAnalyzer):
     """
-    Functional Pipeline Cohesion Analyzer.
+    Conceptual Cohesion of Pipeline Modules (CCPM) Analyzer.
     
-    Evaluates code organization by analyzing:
-    1. ML pipeline stage/phase cohesion
-    2. ML content presence (via MLContentAnalyzer)
-    3. NLOC (Non-comment Lines of Code) to determine file size
+    Evaluates conceptual cohesion by detecting if modules/classes mix responsibilities
+    from different ML pipeline tasks or stages, violating Single Responsibility Principle.
+    
+    Analyzes:
+    1. ML pipeline stage/phase cohesion (via pipeline_stages.json)
+    2. Responsibility mixing detection (single vs multiple stages/phases)
+    3. ML content presence (via MLContentAnalyzer)
+    4. NLOC (Non-comment Lines of Code) for size-based recommendations
+    
+    Cohesion Levels:
+    - Very High: Single stage, ML content only (perfect SRP)
+    - High: Single stage with minor issues
+    - Medium: Single phase, multiple stages (related tasks mixed)
+    - Low: Multiple phases, ML content only (unrelated tasks)
+    - Very Low: Multiple phases + non-ML content (worst case)
     """
     
     def __init__(self, session_id: str, local_path: str, context=None):
@@ -51,26 +62,26 @@ class FPCAnalyzer(BaseAnalyzer):
             context=context
         )
         
-        nloc_threshold = settings.ANALYZER_CONFIG.get('fpc', {}).get('nloc_threshold', 30)
+        nloc_threshold = settings.ANALYZER_CONFIG.get('ccpm', {}).get('nloc_threshold', 30)
         self.nloc_calculator = NLOCCalculator(threshold=nloc_threshold)
         
-        # Initialize FPC evaluator for rule-based diagnosis/recommendations
-        self.evaluator = FPCEvaluator()
+        # Initialize CCPM evaluator for rule-based diagnosis/recommendations
+        self.evaluator = CCPMEvaluator()
     
     @property
     def analyzer_id(self) -> str:
-        return "fpc"
+        return "ccpm"
     
     def analyze(self) -> AnalysisResult:
         """
-        Run FPC analysis on Python files.
+        Run CCPM analysis on Python files.
         
         The files to analyze are determined by the AnalysisContext configuration:
         - If context.all_files=True: Analyzes ALL Python files
         - If context.all_files=False: Prefers ML pipeline files, falls back to all files
         
         Returns:
-            AnalysisResult with FPC score based on ML pipeline cohesion, 
+            AnalysisResult with CCPM score based on ML pipeline cohesion, 
             ML content, and NLOC analysis.
         """
 
@@ -78,9 +89,11 @@ class FPCAnalyzer(BaseAnalyzer):
             'files': {},
             'summary': {
                 'total_files': 0,
+                'very_high_cohesion': 0,
                 'high_cohesion': 0,
                 'medium_cohesion': 0,
                 'low_cohesion': 0,
+                'very_low_cohesion': 0,
                 'non_ml_files': 0,
                 'small_files': 0,
                 'scan_mode': self.context.get_scan_mode(),
@@ -113,7 +126,7 @@ class FPCAnalyzer(BaseAnalyzer):
             file_result = self._analyze_file(tree, source, py_file)
             results['files'][py_file] = file_result
 
-            self.context.set_file_metric(py_file, 'fpc', file_result)
+            self.context.set_file_metric(py_file, 'ccpm', file_result)
             
             # Use evaluator to generate diagnosis/recommendation message
             evaluation = self.evaluator.evaluate_file(py_file, file_result)
@@ -121,18 +134,23 @@ class FPCAnalyzer(BaseAnalyzer):
                 messages_list.append(evaluation)
             
             # Update summary counters (for scoring)
-            if not file_result['ml_content']:
+            cohesion_level = file_result['cohesion_level']
+            if cohesion_level == 'non_ml_file':
                 results['summary']['non_ml_files'] += 1
-            elif not file_result['above_nloc_threshold']:
+            elif cohesion_level == 'very_high':
+                results['summary']['very_high_cohesion'] += 1
+            elif cohesion_level == 'high':
+                results['summary']['high_cohesion'] += 1
+            elif cohesion_level == 'medium':
+                results['summary']['medium_cohesion'] += 1
+            elif cohesion_level == 'low':
+                results['summary']['low_cohesion'] += 1
+            elif cohesion_level == 'very_low':
+                results['summary']['very_low_cohesion'] += 1
+            
+            # Track small files separately
+            if not file_result['above_nloc_threshold'] and cohesion_level != 'non_ml_file':
                 results['summary']['small_files'] += 1
-            else:
-                cohesion_level = file_result['cohesion_level']
-                if cohesion_level == 'high':
-                    results['summary']['high_cohesion'] += 1
-                elif cohesion_level == 'medium':
-                    results['summary']['medium_cohesion'] += 1
-                elif cohesion_level == 'low':
-                    results['summary']['low_cohesion'] += 1
         
         if results['summary']['total_files'] > 0:
             score = self._calculate_cohesion_score(results)
@@ -148,21 +166,26 @@ class FPCAnalyzer(BaseAnalyzer):
     
     def _analyze_file(self, tree: ast.Module, source: str, file_path: str) -> Dict:
         """
-        Analyze a single file for FPC (Functional Pipeline Cohesion).
+        Analyze a single file for CCPM (Conceptual Cohesion of Pipeline Modules).
         
         Evaluates:
         1. Pipeline stage/phase cohesion
         2. ML content presence
         3. NLOC (file size)
         """
+        # Calculate NLOC using NLOCCalculator
         nloc = self.nloc_calculator.calculate_nloc(source)
         above_nloc_threshold = self.nloc_calculator.is_above_threshold(nloc)
         
+        # Detect ML vs non-ML content using MLContentAnalyzer
         ml_result = self.ml_content_analyzer.analyze_file(file_path)
-        has_no_ml_content = ml_result['has_no_ml_content']
+        # Note: has_no_ml_content=True means "contains non-ML code"
+        has_non_ml_content = ml_result['has_no_ml_content']
         non_ml_keywords = ml_result['non_ml_keywords_found']
         
-        ml_content = not has_no_ml_content
+        # ml_content_only=True means "all content is ML-related" (no non-ML code)
+        # ml_content_only=False means "has non-ML code mixed in"
+        ml_content_only = not has_non_ml_content
         
         functions = self._extract_functions(tree)
         # Classify file pattern: functions_only, classes_only, or mixed
@@ -193,7 +216,7 @@ class FPCAnalyzer(BaseAnalyzer):
         cohesion_level = self._determine_cohesion_level(
             unique_stages, 
             unique_phases,
-            ml_content,
+            ml_content_only,
             above_nloc_threshold
         )
         
@@ -205,8 +228,7 @@ class FPCAnalyzer(BaseAnalyzer):
             'cohesion_level': cohesion_level,
             'function_stages': function_stages,
             'source': 'pipeline_metadata' if file_stages_from_pipeline else 'heuristic',
-            'ml_content': ml_content,
-            'has_no_ml_content': has_no_ml_content,
+            'ml_content_only': ml_content_only,
             'non_ml_keywords_found': non_ml_keywords,
             'nloc': nloc,
             'above_nloc_threshold': above_nloc_threshold,
@@ -394,73 +416,90 @@ class FPCAnalyzer(BaseAnalyzer):
         self, 
         unique_stages: int, 
         unique_phases: int,
-        ml_content: bool,
+        ml_content_only: bool,
         above_nloc_threshold: bool
     ) -> str:
         """
-        Determine cohesion level based on stages, phases, ML content, and file size.
+        Determine cohesion level based on Conceptual Cohesion of Pipeline Modules.
+        
+        Evaluates if module/class mixes responsibilities from different ML pipeline
+        tasks or stages, following Single Responsibility Principle (SRP).
         
         Args:
             unique_stages: Number of unique ML pipeline stages
             unique_phases: Number of unique ML pipeline phases
-            ml_content: Whether file contains ML content
+            ml_content_only: True if all content is ML-related (no non-ML code)
             above_nloc_threshold: Whether file is above NLOC threshold
             
         Returns:
-            'high': Single stage (best cohesion)
-            'medium': Single phase, multiple stages
-            'low': Multiple phases (worst cohesion)
+            'very_high': Single stage, ML content only (perfect SRP)
+            'high': Single stage with non-ML content OR single phase/single stage below threshold
+            'medium': Single phase, multiple stages (related but mixed responsibilities)
+            'low': Multiple phases, ML content only (unrelated tasks mixed)
+            'very_low': Multiple phases with non-ML content (worst case)
             'non_ml_file': File doesn't contain ML content
-            'too_small': File is below NLOC threshold (not counted as issue)
         """
         # Non-ML files don't count for cohesion
-        if not ml_content:
+        if not ml_content_only and unique_stages == 0:
             return 'non_ml_file'
         
         # No stages detected
         if unique_stages == 0:
             return 'non_ml_file'
         
-        # Files below threshold are marked but not penalized
-        if not above_nloc_threshold:
-            if unique_stages == 1:
-                return 'high'
-            elif unique_phases == 1:
-                return 'medium'
-            else:
-                return 'too_small'
+        # VERY HIGH: Single stage + ML content only = Perfect SRP
+        if unique_stages == 1 and ml_content_only and above_nloc_threshold:
+            return 'very_high'
         
-        # Regular cohesion evaluation
+        # HIGH: Single stage but has non-ML content OR is too small
         if unique_stages == 1:
             return 'high'
-        elif unique_phases == 1:
-            return 'medium'
-        else:
-            return 'low'
+        
+        # Multiple phases = mixing unrelated pipeline tasks
+        if unique_phases >= 2:
+            # VERY LOW: Multiple phases + non-ML content
+            if not ml_content_only:
+                return 'very_low'
+            # LOW: Multiple phases, ML content only
+            else:
+                return 'low'
+        
+        # Single phase, multiple stages = related tasks but mixed
+        if unique_phases == 1 and unique_stages > 1:
+            # MEDIUM: Could be better separated but at least same phase
+            if not ml_content_only:
+                return 'medium'
+            else:
+                return 'medium'
+        
+        # Default fallback
+        return 'medium'
     
     def _calculate_cohesion_score(self, results: Dict) -> float:
         """
-        Calculate weighted score based on ML pipeline cohesion.
+        Calculate qualitative score based on Conceptual Cohesion of Pipeline Modules.
         
-        Only counts files that:
-        - Have ML content
-        - Are above NLOC threshold
+        Maps cohesion levels to scores for aggregated reporting:
+        - very_high: 10 points (single stage, ML only - perfect SRP)
+        - high: 8 points (single stage with minor issues)
+        - medium: 5 points (single phase, multiple stages)
+        - low: 3 points (multiple phases, ML content)
+        - very_low: 1 point (multiple phases + non-ML content)
         
-        Cohesion scores:
-        - high: 10 points (single stage)
-        - medium: 6 points (single phase, multiple stages)
-        - low: 3 points (multiple phases)
+        Only counts files with ML content.
         
         Args:
             results: Analysis results dictionary
             
         Returns:
-            Score from 0-10 based on cohesion levels
+            Score from 0-10 based on conceptual cohesion levels
         """
         cohesion_scores = {
-            'high': 10,
-            'medium': 6,
-            'low': 3
+            'very_high': 10,
+            'high': 8,
+            'medium': 5,
+            'low': 3,
+            'very_low': 1
         }
         
         total_score = 0
@@ -469,8 +508,8 @@ class FPCAnalyzer(BaseAnalyzer):
         for file_data in results['files'].values():
             cohesion = file_data.get('cohesion_level', 'high')
             
-            # Only count ML files above threshold
-            if cohesion in ['high', 'medium', 'low']:
+            # Only count ML files (exclude non_ml_file)
+            if cohesion in cohesion_scores:
                 total_score += cohesion_scores.get(cohesion, 10)
                 counted_files += 1
         

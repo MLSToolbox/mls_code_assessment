@@ -6,9 +6,9 @@ from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 
 
-class IFCMAnalyzer(BaseAnalyzer):
+class FCPMAnalyzer(BaseAnalyzer):
     """
-    Analyzer for IFC-M (Information Flow Cohesion - Modified) metric.
+    Analyzer for FCPM (Functional Cohesion of Pipeline Modules) metric.
     
     Measures functional connection via information flow:
     - Method invocations
@@ -17,11 +17,11 @@ class IFCMAnalyzer(BaseAnalyzer):
     
     @property
     def analyzer_id(self) -> str:
-        return "ifc_m"
+        return "fcpm"
     
     def analyze(self) -> AnalysisResult:
         """
-        Analyze IFC-M cohesion for all Python files.
+        Analyze FCPM cohesion for all Python files.
         """
         results = {
             'files': {},
@@ -33,7 +33,7 @@ class IFCMAnalyzer(BaseAnalyzer):
                 'low_cohesion': 0,       # 0.2-0.39
                 'very_low_cohesion': 0,  # 0.0-0.19
                 'single_method_files': 0,
-                'average_ifc_m': 0.0
+                'average_fcpm': 0.0
             }
         }
         
@@ -52,9 +52,9 @@ class IFCMAnalyzer(BaseAnalyzer):
             file_result = self._analyze_file(tree, py_file)
             results['files'][py_file] = file_result
             
-            self.context.set_file_metric(py_file, 'ifc_m', file_result)
+            self.context.set_file_metric(py_file, 'fcpm', file_result)
             
-            score = file_result['ifc_m']
+            score = file_result['fcpm']
             if score is None:
                 results['summary']['single_method_files'] += 1
             else:
@@ -66,8 +66,8 @@ class IFCMAnalyzer(BaseAnalyzer):
                 else: results['summary']['very_low_cohesion'] += 1
         
         if scores:
-            results['summary']['average_ifc_m'] = sum(scores) / len(scores)
-            final_score = results['summary']['average_ifc_m'] * 10
+            results['summary']['average_fcpm'] = sum(scores) / len(scores)
+            final_score = results['summary']['average_fcpm'] * 10
         else:
             final_score = 0
             
@@ -86,7 +86,7 @@ class IFCMAnalyzer(BaseAnalyzer):
         
         if n_methods <= 1:
             return {
-                'ifc_m': None,
+                'fcpm': None,
                 'n_methods': n_methods,
                 'n_possible_pairs': 0,
                 'n_connected_pairs': 0,
@@ -129,15 +129,15 @@ class IFCMAnalyzer(BaseAnalyzer):
                     connected_pairs += 1
                     connected_pair_list.append((method_a, method_b))
                     
-        ifc_m = connected_pairs / total_pairs if total_pairs > 0 else 0
+        fcpm = connected_pairs / total_pairs if total_pairs > 0 else 0
         
         return {
-            'ifc_m': round(ifc_m, 3),
+            'fcpm': round(fcpm, 3),
             'n_methods': n_methods,
             'n_possible_pairs': total_pairs,
             'n_connected_pairs': connected_pairs,
             'connected_pairs': connected_pair_list,
-            'cohesion_level': self._categorize_cohesion(ifc_m)
+            'cohesion_level': self._categorize_cohesion(fcpm)
         }
 
     def _extract_methods(self, tree: ast.Module) -> Dict[str, ast.FunctionDef]:
@@ -263,20 +263,20 @@ class IFCMAnalyzer(BaseAnalyzer):
         summary = results['summary']
         
         messages.append({
-            'diagnosis': f"Analyzed {summary['total_files']} files. Average IFC-M: {summary['average_ifc_m']:.2f}",
+            'diagnosis': f"Analyzed {summary['total_files']} files. Average FCPM: {summary['average_fcpm']:.2f}",
             'recommendation': "Check individual files for details.",
             'severity': 'info'
         })
         
         for file_path, data in results['files'].items():
             if data.get('cohesion_level') in ['low', 'very_low']:
-                score = data['ifc_m']
+                score = data['fcpm']
                 messages.append({
                     'file': file_path,
-                    'diagnosis': f"Low functional cohesion (IFC-M: {score:.2f}). Functions are not well connected by flow.",
+                    'diagnosis': f"Low functional cohesion (FCPM: {score:.2f}). Functions are not well connected by flow.",
                     'recommendation': "Ensure functions pass data to each other or use shared state effectively.",
                     'severity': 'medium' if data['cohesion_level'] == 'low' else 'high',
-                    'rule_id': 'ifc_m_cohesion'
+                    'rule_id': 'fcpm_cohesion'
                 })
                 
         return messages

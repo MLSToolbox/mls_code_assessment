@@ -3,32 +3,32 @@ import os
 from ..base_evaluator import BaseEvaluator
 
 
-class FPCEvaluator(BaseEvaluator):
+class CCPMEvaluator(BaseEvaluator):
     """
-    Evaluator for FPC (Functional Pipeline Cohesion) metrics.
+    Evaluator for CCPM (Conceptual Cohesion of Pipeline Modules) metrics.
     Matches calculated metrics against predefined rules to generate
     diagnosis and recommendations.
     """
     
     def __init__(self):
         """
-        Initialize FPC evaluator with rules from fpc_rules.json.
+        Initialize CCPM evaluator with rules from ccpm_rules.json.
         """
         rules_path = os.path.join(
             os.path.dirname(__file__),
-            'fpc_rules.json'
+            'ccpm_rules.json'
         )
         super().__init__(rules_path)
     
     def _match_rule(self, metrics: Dict) -> Optional[Dict]:
         """
-        Match FPC metrics against evaluation rules.
+        Match CCPM metrics against evaluation rules.
         
         Args:
-            metrics: Dictionary containing FPC metrics:
+            metrics: Dictionary containing CCPM metrics:
                 - unique_phases (int): Number of unique phases
                 - unique_stages (int): Number of unique stages  
-                - has_no_ml_content (bool): True if non-ML content detected
+                - ml_content_only (bool): True if all content is ML-related
                 - nloc (int): Non-comment lines of code
                 - above_nloc_threshold (bool): True if NLOC exceeds threshold
         
@@ -37,12 +37,8 @@ class FPCEvaluator(BaseEvaluator):
         """
         unique_phases = metrics.get('unique_phases', 0)
         unique_stages = metrics.get('unique_stages', 0)
-        has_no_ml_content = metrics.get('has_no_ml_content', False)
+        ml_content_only = metrics.get('ml_content_only', True)
         above_nloc_threshold = metrics.get('above_nloc_threshold', False)
-        
-        # Convert has_no_ml_content to ml_content_only for matching
-        # ml_content_only is True when there is NO non-ML content
-        ml_content_only = not has_no_ml_content
         
         for rule in self.rules:
             conditions = rule['conditions']
