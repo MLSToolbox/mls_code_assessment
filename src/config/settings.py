@@ -19,7 +19,6 @@ class Settings:
         "pipeline",
         "ccpm",
         "file_structure",
-        "lccml",
         "ml_content",
         "scpm",
         "fcpm"
@@ -86,7 +85,6 @@ AnalyzerType = Literal[
     "pipeline",
     "ccpm",
     "file_structure",
-    "lccml",
     "ml_content",
     "scpm",
     "fcpm"

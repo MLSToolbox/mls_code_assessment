@@ -4,6 +4,25 @@
 
 Definición final de las métricas de cohesión para módulos Python en proyectos de Machine Learning, implementadas en el sistema de análisis de código.
 
+## Arquitectura de Código Común
+
+A partir de la refactorización post-migraciones, el código común compartido entre los analizadores de cohesión (CCPM, SCPM, FCPM) ha sido extraído al módulo `src/analyzers/common/`:
+
+- **`common/ast_utils.py`**: Utilidades de manipulación AST
+  - `extract_methods()`: Extrae métodos con nombres cualificados (ClassName.method)
+  - `get_attribute_path()`: Obtiene rutas de atributos anidados
+
+- **`common/lcom_analysis.py`**: Análisis LCOM (Lack of Cohesion of Methods)
+  - `count_components()`: Cuenta componentes desconectados usando DFS
+  - `identify_disconnected_methods()`: Identifica métodos sin conexiones
+
+- **`common/variable_detection.py`**: Detección de variables, archivos y llamadas
+  - `is_likely_global_variable()`: Detecta variables globales (excluye 40+ tipos ML como DataFrame, Tensor, etc.)
+  - `get_files_accessed()`: Detecta acceso a 19 tipos de archivos (csv, pkl, h5, json, etc.)
+  - `get_method_calls()`: Extrae llamadas a métodos dentro de un nodo AST
+
+Esta refactorización eliminó ~476 líneas de código duplicado, mejorando la mantenibilidad y consistencia.
+
 ## Estado de Implementación
 
 ### ✅ Métricas Implementadas
@@ -127,10 +146,10 @@ $$SCPM(M) = \frac{2 \times \sum_{i<j} P_{ij}}{n \times (n - 1)}$$
      - Pasar datos explícitamente como parámetros
   4. **Low cohesión:** Agrupar métodos que operan sobre los mismos datasets/modelos
 
-- **Diferencias con LCCML:**
+- **Diferencias con otros analizadores:**
   - **SCPM:** Solo aspectos estructurales (variables + archivos)
-  - **LCCML:** Aspectos estructurales + funcionales (variables + archivos + llamadas a métodos + funciones ML compartidas)
-  - SCPM es subset de LCCML enfocado en cohesión de datos
+  - **FCPM:** Solo aspectos funcionales (invocaciones directas + indirectas)
+  - **Código común:** Ambos comparten utilidades del módulo `analyzers/common/`
 
 - **Archivos:**
   - `src/analyzers/scpm_analyzer.py` - Analizador principal migrado
@@ -199,9 +218,9 @@ $$FCPM = \frac{2 \times \sum_{i<j} F_{ij}}{n \times (n - 1)}$$
   3. **Very Low sin componentes:** Evaluar si los métodos realmente sirven el mismo propósito funcional
   4. **Low cohesión con invocaciones indirectas:** Buen uso de funciones helper, considerar si necesita más colaboración directa
 
-- **Diferencias con LCCML:**
+- **Diferencias con LCCML (descontinuado):**
   - **FCPM:** Solo aspectos **funcionales** → Invocaciones directas + indirectas
-  - **LCCML:** Funcional + estructural → Invocaciones + Variables compartidas + Archivos + Funciones ML
+  - **LCCML (eliminado):** Funcional + estructural → Invocaciones + Variables compartidas + Archivos + Funciones ML
 
 - **Archivos:**
   - `src/analyzers/fcpm/fcpm_analyzer.py` - Analizador migrado con detección de invocaciones indirectas
@@ -210,29 +229,27 @@ $$FCPM = \frac{2 \times \sum_{i<j} F_{ij}}{n \times (n - 1)}$$
 
 ---
 
-### **Logical Class Cohesion Modified for ML - LCCML**
-
-**Estado:** ✅ Implementado
-
-- **Tipo:** Lógico
-- **Definición:** Mide la cohesión lógica de clases en proyectos ML, considerando atributos compartidos y métodos que los utilizan.
-- **Archivos:**
-  - `src/analyzers/lccml_analyzer.py` - Analizador de cohesión lógica de clases
-  - `docs/LCCML_Analysis.md` - Análisis detallado de la métrica
-
----
-
 ## Métricas Descontinuadas
 
-Las siguientes métricas a nivel de **paquetes** han sido eliminadas del sistema:
+Las siguientes métricas han sido eliminadas del sistema:
 
+**A nivel de paquetes:**
 - ❌ **PFP** (Package Functional Purity)
 - ❌ **PDSC** (Package Data Structure Cohesion)
 - ❌ **PMCR** (Package Module Cohesion Ratio)
 - ❌ **IFC-P** (Information Flow Cohesion - Package)
 - ❌ **LPCML** (Loose Package Cohesion Modified for ML)
 
-**Razón:** El enfoque actual se centra en métricas a nivel de **módulo/archivo**, no a nivel de paquete.
+**Razón paquetes:** El enfoque actual se centra en métricas a nivel de **módulo/archivo**, no a nivel de paquete.
+
+**A nivel de módulo:**
+- ❌ **LCCML** (Logical Class Cohesion Modified for ML)
+
+**Razón LCCML:** Funcionalidad redundante con SCPM y FCPM. LCCML combinaba aspectos estructurales (variables compartidas, archivos) y funcionales (invocaciones, funciones ML). Esta funcionalidad ahora está cubierta de forma más específica por:
+  - **SCPM:** Cohesión estructural (variables compartidas, archivos de datos/modelos)
+  - **FCPM:** Cohesión funcional (invocaciones directas e indirectas)
+  
+  El código común compartido entre CCPM, SCPM y FCPM ha sido refactorizado al módulo `analyzers/common/`.
 
 ---
 
@@ -282,7 +299,7 @@ POST /api/analyze/<session_id>
 Content-Type: application/json
 
 {
-  "analyzers": ["ccpm", "scpm", "fcpm", "lccml"],
+  "analyzers": ["ccpm", "scpm", "fcpm"],
   "all_files": false,
   "pipeline_overrides": {
     "file_stages": {"path/to/file.py": ["data_collection"]},
@@ -336,7 +353,8 @@ Content-Type: application/json
 
 - **CCPM:** `docs/CCPM_Migration_Summary.md` - Resumen completo de la migración
 - **CCPM:** `docs/CCPM_Flow_Diagram.md` - Diagramas de flujo y casos de uso
-- **LCCML:** `docs/LCCML_Analysis.md` - Análisis de cohesión lógica de clases
+- **SCPM:** `docs/SCPM_Migration_Summary.md` - Resumen de migración de cohesión estructural
+- **FCPM:** `docs/FCPM_Migration_Summary.md` - Resumen de migración de cohesión funcional
 - **Implementación:** `docs/metrics_implementation.md` - Guía de implementación del sistema de evaluadores
 
 ---

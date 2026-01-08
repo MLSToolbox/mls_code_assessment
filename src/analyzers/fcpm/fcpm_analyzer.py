@@ -5,6 +5,9 @@ from typing import Dict, List, Set, Tuple, Optional, Any
 from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.fcpm.fcpm_evaluator import FCPMEvaluator
+from analyzers.common.ast_utils import extract_methods, get_attribute_path
+from analyzers.common.lcom_analysis import count_components, identify_disconnected_methods
+from analyzers.common.variable_detection import get_method_calls
 
 
 class FCPMAnalyzer(BaseAnalyzer):
@@ -29,6 +32,19 @@ class FCPMAnalyzer(BaseAnalyzer):
     @property
     def analyzer_id(self) -> str:
         return "fcpm"
+    
+    @staticmethod
+    def _is_special_method(method_name: str) -> bool:
+        """
+        Check if a method is a Python special/magic method that should be excluded
+        from disconnection analysis.
+        
+        Special methods like __init__, __str__, etc. serve specific purposes and
+        don't need functional connections to other methods.
+        """
+        # Extract just the method name (remove ClassName. prefix if present)
+        simple_name = method_name.split('.')[-1]
+        return simple_name.startswith('__') and simple_name.endswith('__')
     
     def analyze(self) -> AnalysisResult:
         """
@@ -180,11 +196,14 @@ class FCPMAnalyzer(BaseAnalyzer):
         n_connected_pairs = len(connected_pairs)
         fcpm = (2 * n_connected_pairs) / (n_methods * (n_methods - 1)) if n_methods > 1 else 0
         
-        # LCOM analysis: count functional components
-        n_components = self._count_components(adjacency, method_names)
+        # LCOM analysis: count functional components (excluding special methods)
+        # Special methods like __init__ shouldn't count as separate functional groups
+        regular_methods = [m for m in method_names if not self._is_special_method(m)]
+        n_components = self._count_components(adjacency, regular_methods) if regular_methods else 0
         
-        # Identify disconnected methods
-        disconnected_methods = self._identify_disconnected_methods(adjacency, method_names)
+        # Identify disconnected methods (excluding special methods like __init__)
+        all_disconnected = self._identify_disconnected_methods(adjacency, method_names)
+        disconnected_methods = [m for m in all_disconnected if not self._is_special_method(m)]
         
         return {
             'fcpm': round(fcpm, 3),
@@ -221,64 +240,15 @@ class FCPMAnalyzer(BaseAnalyzer):
 
     def _extract_methods(self, tree: ast.Module) -> Dict[str, ast.FunctionDef]:
         """Extract all methods from the AST, with qualified names."""
-        class MethodVisitor(ast.NodeVisitor):
-            def __init__(self):
-                self.current_class = None
-                self.methods = {}
-            
-            def visit_ClassDef(self, node):
-                old_class = self.current_class
-                self.current_class = node.name
-                self.generic_visit(node)
-                self.current_class = old_class
-            
-            def visit_FunctionDef(self, node):
-                if self.current_class:
-                    method_name = f"{self.current_class}.{node.name}"
-                else:
-                    method_name = node.name
-                self.methods[method_name] = node
-                # Don't visit nested functions
-                for child in ast.iter_child_nodes(node):
-                    if not isinstance(child, ast.FunctionDef):
-                        self.visit(child)
-        
-        visitor = MethodVisitor()
-        visitor.visit(tree)
-        return visitor.methods
+        return extract_methods(tree)
 
     def _get_method_calls(
         self, 
         method_node: ast.FunctionDef,
         all_methods: Dict[str, ast.FunctionDef]
     ) -> Set[str]:
-        """
-        Extract which other methods this method calls.
-        
-        Detects:
-        - Direct function calls: my_function()
-        - Method calls: self.my_method()
-        - Qualified calls: ClassName.method_name()
-        """
-        calls = set()
-        method_names = set(all_methods.keys())
-        
-        for node in ast.walk(method_node):
-            if isinstance(node, ast.Call):
-                func_name = self._get_function_name(node.func)
-                
-                # Direct match
-                if func_name in method_names:
-                    calls.add(func_name)
-                # Match qualified name (e.g., "self.method" → "ClassName.method")
-                elif '.' in func_name:
-                    parts = func_name.split('.')
-                    if len(parts) >= 2:
-                        for full_name in method_names:
-                            if full_name.endswith('.' + parts[-1]):
-                                calls.add(full_name)
-        
-        return calls
+        """Extract which other methods this method calls."""
+        return get_method_calls(method_node, all_methods)
 
     def _get_function_name(self, func_node) -> str:
         """Extract function name from Call node."""
@@ -288,64 +258,23 @@ class FCPMAnalyzer(BaseAnalyzer):
             return self._get_attribute_path(func_node)
         return ''
 
+
     def _get_attribute_path(self, node: ast.Attribute) -> str:
         """Extract attribute path like 'self.method' or 'obj.method'."""
-        parts = []
-        current = node
-        while isinstance(current, ast.Attribute):
-            parts.append(current.attr)
-            current = current.value
-        if isinstance(current, ast.Name):
-            parts.append(current.id)
-            return '.'.join(reversed(parts))
-        return ''
+        return get_attribute_path(node)
+
 
     def _count_components(self, adjacency: Dict[str, List[str]], methods: List[str]) -> int:
-        """
-        Count disconnected functional components using DFS.
-        
-        If n_components > 1, the module contains functionally independent groups
-        that should potentially be split into separate modules.
-        """
-        visited = set()
-        components = 0
-        
-        def dfs(node: str):
-            visited.add(node)
-            for neighbor in adjacency.get(node, []):
-                if neighbor not in visited:
-                    dfs(neighbor)
-        
-        for method in methods:
-            if method not in visited:
-                components += 1
-                dfs(method)
-        
-        return components
+        """Count disconnected functional components using DFS."""
+        return count_components(adjacency, methods)
 
     def _identify_disconnected_methods(
         self, 
         adjacency: Dict[str, List[str]], 
         methods: List[str]
     ) -> List[str]:
-        """
-        Identify methods that have no functional connections to any other method.
-        
-        These methods:
-        - Don't call any other methods in the module
-        - Aren't called by any other methods in the module
-        
-        Returns:
-            List of method names that are functionally disconnected
-        """
-        disconnected = []
-        
-        for method in methods:
-            # Check if this method has any connections in the adjacency graph
-            if not adjacency.get(method, []):
-                disconnected.append(method)
-        
-        return disconnected
+        """Identify methods that have no functional connections to any other method."""
+        return identify_disconnected_methods(adjacency, methods)
 
     def _categorize_cohesion(self, score: float) -> str:
         """Map FCPM score to cohesion level."""

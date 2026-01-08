@@ -21,7 +21,6 @@ class AnalyzerFactory:
             from analyzers.ccpm import CCPMAnalyzer
             from analyzers.file_structure_analyzer import FileStructureAnalyzer
             from analyzers.ml_content import MLContentAnalyzer
-            from analyzers.lccml_analyzer import LCCMLAnalyzer
             from analyzers.scpm import SCPMAnalyzer
             from analyzers.fcpm import FCPMAnalyzer
             
@@ -33,7 +32,6 @@ class AnalyzerFactory:
                 "ccpm": CCPMAnalyzer,
                 "file_structure": FileStructureAnalyzer,
                 "ml_content": MLContentAnalyzer,
-                "lccml": LCCMLAnalyzer,
                 "scpm": SCPMAnalyzer,
                 "fcpm": FCPMAnalyzer,
             }
