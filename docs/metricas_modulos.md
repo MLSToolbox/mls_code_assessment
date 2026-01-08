@@ -141,40 +141,72 @@ $$SCPM(M) = \frac{2 \times \sum_{i<j} P_{ij}}{n \times (n - 1)}$$
 
 ### **Functional Cohesion of Pipeline Modules - FCPM**
 
-**Estado:** ✅ Implementado
+**Estado:** ✅ Migrado (Enero 2026)
 
 - **Tipo:** Funcional
-- **Definición:** Mide cuánto están relacionadas las funciones de un módulo o clase desde el punto de vista de las invocaciones que realizan entre sí.
-- **Cálculo / Condición:** Se define $F_{ij} = 1$ si las funciones $i$ y $j$ cumplen:
-  1. **Invocación directa:** $f_i \to f_j$ o $f_j \to f_i$
-  2. **Invocación a tercero común:** Ambas invocan a una tercera función $f_t$ del mismo módulo/clase
+- **Definición:** Mide la cohesión funcional mediante patrones de invocación entre métodos, detectando relaciones directas e indirectas.
 
 - **Fórmula:** 
 $$FCPM = \frac{2 \times \sum_{i<j} F_{ij}}{n \times (n - 1)}$$
 
-  Donde $n$ es el número de funciones del módulo/clase.
+  Donde:
+  - $n$ = número de funciones/métodos del módulo o clase
+  - $F_{ij} = 1$ si se cumple alguna de estas condiciones:
+    1. **Invocación directa:** $f_i \to f_j$ o $f_j \to f_i$
+    2. **Invocación indirecta:** Ambas funciones ($f_i$ y $f_j$) invocan a una tercera función común $f_t$ del mismo módulo/clase
 
 - **Rangos de Diagnóstico:**
 
-| Rango       | Nivel     |
-| :---------- | :-------- |
-| [0.8 - 1.0] | Very High |
-| [0.6 - 0.8) | High      |
-| [0.4 - 0.6) | Medium    |
-| [0.2 - 0.4) | Low       |
-| [0.0 - 0.2) | Very Low  |
+| Rango       | Nivel     | Descripción |
+| :---------- | :-------- | :---------- |
+| [0.8 - 1.0] | Very High | Casi todos los pares se invocan |
+| [0.6 - 0.8) | High      | Fuerte colaboración funcional |
+| [0.4 - 0.6) | Medium    | Relaciones funcionales moderadas |
+| [0.2 - 0.4) | Low       | Conexiones funcionales débiles |
+| [0.0 - 0.2) | Very Low  | Métodos operan independientemente |
+
+- **Análisis LCOM (Lack of Cohesion of Methods):**
+  - Detecta **grupos desconectados funcionalmente** mediante análisis de grafos (DFS)
+  - Si `n_components > 1`: El módulo contiene X flujos funcionales independientes → Dividir en X módulos
+  - **Identificación de métodos desconectados:** Lista específica {f1, ..., fn} de funciones sin invocaciones
+
+- **Sistema de Evaluación:**
+  - **14 reglas** en `fcpm_rules.json` para diagnóstico contextual
+  - Considera: `cohesion_level`, `n_components`, `n_disconnected_methods`, `breakdown` (invocaciones directas vs indirectas)
+  - Genera diagnósticos y recomendaciones específicas por archivo
+  - **Recomendaciones cruzadas con SCPM:** Para métodos desconectados, sugiere verificar cohesión estructural
+
+- **Detección de Invocaciones:**
+  - **Directas:** Análisis AST de nodos `ast.Call` para detectar `f_i()`, `self.f_j()`, `ClassName.method()`
+  - **Indirectas:** Construcción de call graph, intersección de callees comunes:
+    ```python
+    common_callees = calls(f_i) ∩ calls(f_j) ∩ {métodos del mismo módulo}
+    if common_callees ≠ ∅ → F_ij = 1
+    ```
+  - **Breakdown:** Conteo separado de invocaciones directas e indirectas para insights detallados
 
 - **Interpretación:**
-  - **Very High/High:** Funciones están fuertemente acopladas funcionalmente (se invocan frecuentemente)
-  - **Medium:** Cohesión funcional moderada
-  - **Low/Very Low:** Funciones operan independientemente, no colaboran funcionalmente
+  - **Very High/High:** Excelente cohesión funcional, métodos colaboran intensivamente mediante invocaciones
+  - **Medium:** Cohesión aceptable, algunas oportunidades de mejora
+  - **Low/Very Low:** Métodos operan independientemente, probable violación del SRP
 
 - **Recomendaciones de Refactorización:**
-  1. **Caso General:** Si las funciones tienen baja SCPM (no comparten datos) y baja FCPM, moverlas a módulos más relacionados
-  2. **Caso Avanzado (LCOM):** Si se detectan X grupos conectados funcionalmente pero no estructuralmente, dividir en X módulos
+  1. **LCOM > 1:** Dividir módulo en `n_components` módulos (uno por flujo funcional)
+  2. **Métodos desconectados identificados:** Para cada función {f1, ..., fn} sin invocaciones:
+     - Verificar SCPM (cohesión estructural) para determinar si comparten datos
+     - Si FCPM bajo Y SCPM bajo: mover a módulos más relacionados
+     - Si FCPM bajo pero SCPM alto: mantener juntos, mejorar colaboración funcional
+  3. **Very Low sin componentes:** Evaluar si los métodos realmente sirven el mismo propósito funcional
+  4. **Low cohesión con invocaciones indirectas:** Buen uso de funciones helper, considerar si necesita más colaboración directa
+
+- **Diferencias con LCCML:**
+  - **FCPM:** Solo aspectos **funcionales** → Invocaciones directas + indirectas
+  - **LCCML:** Funcional + estructural → Invocaciones + Variables compartidas + Archivos + Funciones ML
 
 - **Archivos:**
-  - `src/analyzers/fcpm_analyzer.py` - Analizador de cohesión funcional
+  - `src/analyzers/fcpm/fcpm_analyzer.py` - Analizador migrado con detección de invocaciones indirectas
+  - `src/analyzers/fcpm/fcpm_evaluator.py` - Evaluador basado en reglas
+  - `src/analyzers/fcpm/fcpm_rules.json` - 14 reglas de diagnóstico
 
 ---
 

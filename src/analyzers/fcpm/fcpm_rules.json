@@ -1,0 +1,140 @@
+{
+  "rules": [
+    {
+      "id": 1,
+      "conditions": {
+        "cohesion_level": "very_low",
+        "n_components": ">1"
+      },
+      "diagnosis_template": "Critical - The {module_name} module has very low functional cohesion (FCPM: {fcpm:.2f}) with {n_components} disconnected functional groups. Methods are not collaborating through invocations.",
+      "recommendation_template": "Split this module into {n_components} separate modules, each containing one functionally connected group. Methods within each group should share a common functional purpose.",
+      "severity": "critical"
+    },
+    {
+      "id": 2,
+      "conditions": {
+        "cohesion_level": "very_low",
+        "n_disconnected_methods": ">0"
+      },
+      "diagnosis_template": "Critical - The {module_name} module has very low functional cohesion (FCPM: {fcpm:.2f}). The methods {disconnected_methods_str} have no functional connections (neither call nor are called by other methods).",
+      "recommendation_template": "Review SCPM for {disconnected_methods_str} to determine if they share data. If both FCPM and SCPM are low, consider moving these methods to more appropriate modules where they have functional relationships.",
+      "severity": "critical"
+    },
+    {
+      "id": 3,
+      "conditions": {
+        "cohesion_level": "very_low",
+        "n_components": "=1"
+      },
+      "diagnosis_template": "Very low functional cohesion in {module_name} (FCPM: {fcpm:.2f}). {n_methods} methods exist but rarely invoke each other, suggesting weak functional relationships.",
+      "recommendation_template": "Consider whether these methods truly belong together. If they share data (high SCPM) but don't call each other, they may represent separate responsibilities that should be split.",
+      "severity": "high"
+    },
+    {
+      "id": 4,
+      "conditions": {
+        "cohesion_level": "low",
+        "n_components": ">1"
+      },
+      "diagnosis_template": "Low functional cohesion in {module_name} (FCPM: {fcpm:.2f}) with {n_components} functional groups. The module contains distinct workflows that operate independently.",
+      "recommendation_template": "Refactor into {n_components} separate modules to isolate each functional workflow. This will improve maintainability and testability.",
+      "severity": "high"
+    },
+    {
+      "id": 5,
+      "conditions": {
+        "cohesion_level": "low",
+        "n_disconnected_methods": ">0"
+      },
+      "diagnosis_template": "Low functional cohesion in {module_name} (FCPM: {fcpm:.2f}). The methods {disconnected_methods_str} have no invocation relationships with other methods.",
+      "recommendation_template": "Cross-check SCPM for {disconnected_methods_str}. If they also have low structural cohesion, they are strong candidates for extraction to separate modules.",
+      "severity": "high"
+    },
+    {
+      "id": 6,
+      "conditions": {
+        "cohesion_level": "low"
+      },
+      "diagnosis_template": "Low functional cohesion in {module_name} (FCPM: {fcpm:.2f}). Methods have weak invocation relationships.",
+      "recommendation_template": "Review the module's responsibility. Methods that collaborate toward a common goal should call each other more frequently. Consider extracting unrelated methods.",
+      "severity": "medium"
+    },
+    {
+      "id": 7,
+      "conditions": {
+        "cohesion_level": "medium",
+        "n_components": ">1"
+      },
+      "diagnosis_template": "Moderate functional cohesion in {module_name} (FCPM: {fcpm:.2f}), but {n_components} functional groups detected. Some methods collaborate while others remain isolated.",
+      "recommendation_template": "Evaluate whether the {n_components} groups represent distinct responsibilities. If so, extract them into separate modules to improve cohesion.",
+      "severity": "medium"
+    },
+    {
+      "id": 8,
+      "conditions": {
+        "cohesion_level": "medium",
+        "indirect_invocations": ">0"
+      },
+      "diagnosis_template": "Moderate functional cohesion in {module_name} (FCPM: {fcpm:.2f}). Methods are connected through {indirect_invocations} indirect invocations (via common helper functions) and {direct_invocations} direct invocations.",
+      "recommendation_template": "Good use of helper functions. Consider whether additional direct collaborations between methods would improve the module's functional flow.",
+      "severity": "info"
+    },
+    {
+      "id": 9,
+      "conditions": {
+        "cohesion_level": "medium"
+      },
+      "diagnosis_template": "Moderate functional cohesion in {module_name} (FCPM: {fcpm:.2f}). Some methods collaborate through invocations, but there's room for improvement.",
+      "recommendation_template": "Acceptable cohesion level. Review whether all methods serve the same functional purpose. Extract any outliers.",
+      "severity": "info"
+    },
+    {
+      "id": 10,
+      "conditions": {
+        "cohesion_level": "high",
+        "n_components": "=1"
+      },
+      "diagnosis_template": "High functional cohesion in {module_name} (FCPM: {fcpm:.2f}). Methods collaborate well through {direct_invocations} direct and {indirect_invocations} indirect invocations.",
+      "recommendation_template": "Excellent - methods work together toward a common functional goal. Continue maintaining this cohesive design.",
+      "severity": "info"
+    },
+    {
+      "id": 11,
+      "conditions": {
+        "cohesion_level": "high",
+        "indirect_invocations": ">0"
+      },
+      "diagnosis_template": "High functional cohesion in {module_name} (FCPM: {fcpm:.2f}). Methods are well-connected through {indirect_invocations} shared helper functions and {direct_invocations} direct collaborations.",
+      "recommendation_template": "Excellent use of helper functions to promote code reuse while maintaining functional cohesion.",
+      "severity": "info"
+    },
+    {
+      "id": 12,
+      "conditions": {
+        "cohesion_level": "high"
+      },
+      "diagnosis_template": "High functional cohesion in {module_name} (FCPM: {fcpm:.2f}). Methods have strong functional relationships through invocations.",
+      "recommendation_template": "Well-designed module with methods that collaborate effectively. Maintain this pattern.",
+      "severity": "info"
+    },
+    {
+      "id": 13,
+      "conditions": {
+        "cohesion_level": "very_high",
+        "n_components": "=1"
+      },
+      "diagnosis_template": "Excellent functional cohesion in {module_name} (FCPM: {fcpm:.2f}). Almost all methods are interconnected through invocations, demonstrating a highly cohesive functional design.",
+      "recommendation_template": "Optimal - this module exemplifies excellent functional cohesion with methods working as a unified, collaborative unit.",
+      "severity": "info"
+    },
+    {
+      "id": 14,
+      "conditions": {
+        "cohesion_level": "very_high"
+      },
+      "diagnosis_template": "Very high functional cohesion in {module_name} (FCPM: {fcpm:.2f}). Methods are highly interconnected through {total_invocations} functional relationships.",
+      "recommendation_template": "Excellent design. Methods collaborate intensively, suggesting a well-defined single responsibility.",
+      "severity": "info"
+    }
+  ]
+}

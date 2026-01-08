@@ -253,22 +253,43 @@ METRICS_REGISTRY = {
         metric_id="fcpm",
         name="Functional Cohesion of Pipeline Modules",
         description=(
-            "Measures functional connection between functions via information flow. "
-            "Considers direct method invocations and data flow (producer-consumer relationships)."
+            "Measures functional cohesion through method invocation patterns. "
+            "FORMULA: FCPM = (2 × Σi<j F_ij) / (n × (n-1))\n\n"
+            "F_ij = 1 if any of:\n"
+            "• Direct invocation: f_i → f_j or f_j → f_i\n"
+            "• Indirect invocation: both f_i and f_j call a common third function f_t (same module/class)\n\n"
+            "Analysis steps:\n"
+            "• _build_call_graph(): Constructs invocation graph {method: [methods_called]}\n"
+            "• For each pair (i, j):\n"
+            "  - Check direct: f_j ∈ calls(f_i) OR f_i ∈ calls(f_j)\n"
+            "  - Check indirect: calls(f_i) ∩ calls(f_j) ∩ {same module methods} ≠ ∅\n"
+            "  - If either is true: F_ij = 1\n"
+            "• _count_components(): LCOM analysis using DFS to find functionally disconnected groups\n"
+            "• _identify_disconnected_methods(): Identifies methods with no invocation connections\n\n"
+            "Cohesion levels:\n"
+            "• very_high (0.8-1.0): Almost all method pairs have invocation relationships\n"
+            "• high (0.6-0.79): Strong functional collaboration through invocations\n"
+            "• medium (0.4-0.59): Moderate functional connections\n"
+            "• low (0.2-0.39): Weak invocation relationships\n"
+            "• very_low (0.0-0.19): Methods rarely invoke each other, operate independently\n\n"
+            "LCOM Enhancement: If n_components > 1, module contains functionally independent workflows → split.\n"
+            "Disconnected Methods: Methods with no invocations are explicitly identified for SCPM cross-check.\n\n"
+            "Evaluation (fcpm_evaluator.py): Matches metrics against fcpm_rules.json (14 rules) considering:\n"
+            "- Cohesion level, n_components, n_disconnected_methods, breakdown (direct vs indirect invocations)"
         ),
         formula=(
-            "IFC-M = (2 * sum(F_ij)) / (n * (n-1)), where F_ij = 1 if function i calls j "
-            "OR i consumes data produced by j."
+            "FCPM = (2 × Σi<j F_ij) / (n × (n-1)), where:\n"
+            "F_ij = 1 if direct invocation (f_i→f_j) OR indirect (both call common f_t)"
         ),
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.7", "acceptable": "0.5-0.7", "warning": "<0.5"},
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
         interpretation={
-            "0.8-1.0": "Excellent - High functional cohesion",
-            "0.6-0.79": "Good - Functions are well connected",
-            "0.4-0.59": "Moderate - Some functional connections",
-            "0.2-0.39": "Low - Few functional connections",
-            "0.0-0.19": "Very Low - Functions operate independently"
+            "very_high (0.8-1.0)": "Excellent - Maximum functional cohesion, methods highly interconnected via invocations",
+            "high (0.6-0.79)": "Good - Strong functional collaboration between methods",
+            "medium (0.4-0.59)": "Moderate - Some invocation relationships exist",
+            "low (0.2-0.39)": "Poor - Weak functional connections, methods operate too independently",
+            "very_low (0.0-0.19)": "Critical - Minimal invocations, methods likely violate SRP, needs refactoring"
         },
-        references=["Internal Definition"],
+        references=["FCPM - Functional Cohesion of Pipeline Modules (Internal Definition)"],
         category="cohesion"
     ),
 }

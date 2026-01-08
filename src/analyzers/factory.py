@@ -23,7 +23,7 @@ class AnalyzerFactory:
             from analyzers.ml_content import MLContentAnalyzer
             from analyzers.lccml_analyzer import LCCMLAnalyzer
             from analyzers.scpm import SCPMAnalyzer
-            from analyzers.fcpm_analyzer import FCPMAnalyzer
+            from analyzers.fcpm import FCPMAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
