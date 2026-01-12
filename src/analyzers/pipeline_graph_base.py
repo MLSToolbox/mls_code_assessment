@@ -152,6 +152,28 @@ class PipelineGraphBaseAnalyzer(BaseAnalyzer):
         resources = set()
         tree = self.context.get_file_ast(file_path)
         if not tree: return resources
+
+        # Helper to process potentail file/URI strings
+        def _process_str_arg(val_str):
+            # Helper for OS-agnostic basename (URIs often use /, while Windows uses \)
+            def get_robust_basename(path_str):
+                return path_str.replace('\\', '/').split('/')[-1]
+
+            # 1. Extensions check
+            if val_str.endswith(('.yaml', '.yml', '.json', '.csv', '.parquet', '.pkl', '.h5', '.pth', '.joblib')):
+                return get_robust_basename(val_str)
+            
+            # 2. MLflow / URI check
+            if 'mlruns' in val_str or val_str.startswith(('file:', 'sqlite:', 'postgresql:', 'http:', 'https:', 's3:', 'gs:')):
+                # Normalize URI: remove prefix 'file:', 'sqlite:///'
+                clean_val = val_str
+                if ':' in val_str:
+                    clean_val = val_str.split(':', 1)[1] # remove schema
+                
+                # Extract the final component reliably
+                return get_robust_basename(clean_val)
+            return None
+
         for node in ast.walk(tree):
             # 1. Direct Variables (e.g., global variables or specific usages)
             if isinstance(node, ast.Name):
@@ -204,27 +226,6 @@ class PipelineGraphBaseAnalyzer(BaseAnalyzer):
             # 5. Shared Configuration/Data Files (String Literals in calls) & Semantic Models
             # Detects: load("params.yaml"), read_csv("data.csv"), RandomForestClassifier()
             if isinstance(node, ast.Call):
-                # Helper to process potentail file/URI strings
-                def _process_str_arg(val_str):
-                    # Helper for OS-agnostic basename (URIs often use /, while Windows uses \)
-                    def get_robust_basename(path_str):
-                        return path_str.replace('\\', '/').split('/')[-1]
-
-                    # 1. Extensions check
-                    if val_str.endswith(('.yaml', '.yml', '.json', '.csv', '.parquet', '.pkl', '.h5', '.pth', '.joblib')):
-                        return get_robust_basename(val_str)
-                    
-                    # 2. MLflow / URI check
-                    if 'mlruns' in val_str or val_str.startswith(('file:', 'sqlite:', 'postgresql:', 'http:', 'https:', 's3:', 'gs:')):
-                        # Normalize URI: remove prefix 'file:', 'sqlite:///'
-                        clean_val = val_str
-                        if ':' in val_str:
-                            clean_val = val_str.split(':', 1)[1] # remove schema
-                        
-                        # Extract the final component reliably
-                        return get_robust_basename(clean_val)
-                    return None
-
                 # 8. Semantic Model Detection (Instantiations & Loading)
                 # A. Detect Model Instantiation (e.g. RandomForestClassifier())
                 full_func_name = ""

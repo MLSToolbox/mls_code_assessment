@@ -386,6 +386,26 @@ METRICS_REGISTRY = {
         },
         ideal_range={"min": 1, "max": 1, "optimal": "1", "acceptable": "1"},
         category="cohesion"
+    ),
+
+    "fcpp": MetricMetadata(
+        metric_id="fcpp",
+        name="Functional Cohesion of Pipeline Packages",
+        description=(
+            "Measures functional cohesion based on call graph invocations (direct/indirect) "
+            "between package modules."
+        ),
+        formula="FCPP(P) = (2 * sum(F_ij)) / (m * (m - 1))",
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.6", "acceptable": "0.4-0.6", "warning": "<0.4"},
+        interpretation={
+            "0.8-1.0": "Very High",
+            "0.6-0.8": "High",
+            "0.4-0.6": "Medium",
+            "0.2-0.4": "Low",
+            "0.0-0.2": "Very Low"
+        },
+        references=["Internal Definition - FCPP"],
+        category="cohesion"
     )
 }
 
