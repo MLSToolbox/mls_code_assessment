@@ -32,7 +32,6 @@ Ejecuta analizadores sobre sesión existente:
 - `scpm` - Cohesión Estructural de Módulos Pipeline
 - `fcpm` - Cohesión Funcional de Módulos Pipeline
 - `file_structure` - Estructura de directorios
-- `lccml` - Cohesión Lógica de Clases ML
 - `ml_content` - Detección de contenido ML/no-ML
 
 ## Arquitectura
@@ -86,7 +85,7 @@ src/
 - `file_handler.py` - Manejo de ZIP files
 - `cleanup_scheduler.py` - Limpieza automática de sesiones expiradas
 
-## Principios de diseño
+## Principios de diseño aplicados
 
 ### **SOLID**
 - **Single Responsibility**: Cada clase tiene una responsabilidad única
