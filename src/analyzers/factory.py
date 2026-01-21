@@ -18,40 +18,22 @@ class AnalyzerFactory:
             from analyzers.radon_cc_analyzer import RadonCCAnalyzer
             from analyzers.radon_mi_analyzer import RadonMIAnalyzer
             from analyzers.pipeline.pipeline_analyzer import PipelineAnalyzer
-            from analyzers.fpc import FPCAnalyzer
-            from analyzers.ccpp import CCPPAnalyzer
+            from analyzers.ccpm import CCPMAnalyzer
             from analyzers.file_structure_analyzer import FileStructureAnalyzer
             from analyzers.ml_content import MLContentAnalyzer
-            from analyzers.lccml_analyzer import LCCMLAnalyzer
-            from analyzers.ldsc_analyzer import LDSCAnalyzer
-            from analyzers.pdsc_analyzer import PDSCAnalyzer
-            from analyzers.ifc_m_analyzer import IFCMAnalyzer
-            from analyzers.pmcr_analyzer import PMCRAnalyzer
-            from analyzers.ifc_p_analyzer import IFCPAnalyzer
-            from analyzers.lpcml_analyzer import LPCMLAnalyzer
-            from analyzers.scpp_analyzer import SCPPAnalyzer
-            from analyzers.plcom_analyzer import PLCOMAnalyzer
-            from analyzers.fcpp_analyzer import FCPPAnalyzer
+            from analyzers.scpm import SCPMAnalyzer
+            from analyzers.fcpm import FCPMAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
                 "radon_cc": RadonCCAnalyzer,
                 "radon_mi": RadonMIAnalyzer,
                 "pipeline": PipelineAnalyzer,
-                "fpc": FPCAnalyzer,
-                "ccpp": CCPPAnalyzer,
+                "ccpm": CCPMAnalyzer,
                 "file_structure": FileStructureAnalyzer,
                 "ml_content": MLContentAnalyzer,
-                "lccml": LCCMLAnalyzer,
-                "ldsc": LDSCAnalyzer,
-                "pdsc": PDSCAnalyzer,
-                "ifc_m": IFCMAnalyzer,
-                "pmcr": PMCRAnalyzer,
-                "ifc_p": IFCPAnalyzer,
-                "lpcml": LPCMLAnalyzer,
-                "scpp": SCPPAnalyzer,
-                "p-lcom": PLCOMAnalyzer,
-                "fcpp": FCPPAnalyzer,
+                "scpm": SCPMAnalyzer,
+                "fcpm": FCPMAnalyzer,
             }
         return cls._analyzers
     
@@ -67,7 +49,7 @@ class AnalyzerFactory:
         Create analyzer instance by type.
         
         Args:
-            analyzer_type: Type of analyzer (e.g., 'pylint', 'fpc', 'file_structure')
+            analyzer_type: Type of analyzer (e.g., 'pylint', 'ccpm', 'file_structure')
             session_id: Unique session identifier
             local_path: Path to extracted code
             context: Shared analysis context (optional)
