@@ -42,7 +42,7 @@ class PDSCAnalyzer(BaseAnalyzer):
             }
         }
         
-        # Group files by package (directory) - Inspired by PFPAnalyzer
+        # Group files by package (directory) - Inspired by CCPPAnalyzer
         python_files = self.context.get_all_python_files()
         packages = defaultdict(list)
         

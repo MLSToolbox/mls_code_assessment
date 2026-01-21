@@ -4,37 +4,37 @@ from collections import defaultdict
 
 from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
-from analyzers.pfp.pfp_calculator import PFPCalculator
-from analyzers.pfp.pfp_evaluator import PFPEvaluator
+from analyzers.ccpp.ccpp_calculator import CCPPCalculator
+from analyzers.ccpp.ccpp_evaluator import CCPPEvaluator
 
 
-class PFPAnalyzer(BaseAnalyzer):
+class CCPPAnalyzer(BaseAnalyzer):
     """
-    Analyzes Package Functional Purity (PFP).
+    Analyzes Conceptual Cohesion of Pipeline Packages (CCPP).
     
     This metric measures how focused a package is on a specific ML pipeline function.
-    It depends on the results of the FPCAnalyzer and reuses FPC metrics at package level.
+    It depends on the results of the CCPPAnalyzer and reuses CCPP metrics at package level.
     
-    Architecture (modular approach like FPC):
-    - PFPAnalyzer: Main analyzer, orchestrates analysis
-    - PFPCalculator: Handles PFP score calculation
-    - PFPEvaluator: Matches metrics against rules, generates diagnosis/recommendations
+    Architecture :
+    - CCPPAnalyzer: Main analyzer, orchestrates analysis
+    - CCPPCalculator: Handles CCPP score calculation
+    - CCPPEvaluator: Matches metrics against rules, generates diagnosis/recommendations
     """
 
     @property
     def analyzer_id(self) -> str:
-        return "pfp"
+        return "ccpp"
     
     def __init__(self, session_id: str, local_path: str, context=None):
         super().__init__(session_id, local_path, context)
-        self.calculator = PFPCalculator(etapas_max=6)
-        self.evaluator = PFPEvaluator()
+        self.calculator = CCPPCalculator(etapas_max=6)
+        self.evaluator = CCPPEvaluator()
 
     def analyze(self) -> AnalysisResult:
         
         packages = self._discover_packages()
         package_results = {}
-        total_pfp_score = 0
+        total_ccpp_score = 0
         messages_list = []
         if not packages:
             return self._create_result(
@@ -46,15 +46,15 @@ class PFPAnalyzer(BaseAnalyzer):
 
         for pkg_path, modules in packages.items():
             package_results[pkg_path] = self._analyze_package(pkg_path, modules)
-            total_pfp_score += package_results[pkg_path]['pfp_score']
+            total_ccpp_score += package_results[pkg_path]['ccpp_score']
             
             
             evaluation = self.evaluator.evaluate_package(pkg_path, package_results[pkg_path])
             if evaluation:
                 messages_list.append(evaluation)
 
-        average_pfp = total_pfp_score / len(packages)
-        final_score = round(average_pfp * 10, 2)
+        average_ccpp = total_ccpp_score / len(packages)
+        final_score = round(average_ccpp * 10, 2)
         
         
 
@@ -65,10 +65,10 @@ class PFPAnalyzer(BaseAnalyzer):
             details={
                 "summary": {
                     "total_packages_analyzed": len(packages),
-                    "average_pfp_score": round(average_pfp, 4),
-                    "overall_quality": self.calculator.get_overall_quality(average_pfp),
-                    "packages_needing_attention": len([p for p in package_results.values() if p['pfp_score'] < 0.6]),
-                    "packages_with_good_purity": len([p for p in package_results.values() if p['pfp_score'] >= 0.6]),
+                    "average_ccpp_score": round(average_ccpp, 4),
+                    "overall_quality": self.calculator.get_overall_quality(average_ccpp),
+                    "packages_needing_attention": len([p for p in package_results.values() if p['ccpp_score'] < 0.6]),
+                    "packages_with_good_purity": len([p for p in package_results.values() if p['ccpp_score'] >= 0.6]),
                     "etapas_max": self.calculator.get_etapas_max(),
                     "purity_summary": self._generate_summary(package_results)
                 },
@@ -79,14 +79,14 @@ class PFPAnalyzer(BaseAnalyzer):
 
     def _analyze_package(self, pkg_path: str, modules: List[str]) -> Dict[str, Any]:
         """
-        Calculates PFP for a single package by reusing FPC metrics.
+        Calculates CCPP for a single package by reusing FPC metrics.
         
         Args:
             pkg_path: Package directory path
             modules: List of module file paths in package
             
         Returns:
-            Dictionary with package PFP metrics
+            Dictionary with package CCPP metrics
         """
         fpc_results = []
         for module_path in modules:
@@ -111,8 +111,8 @@ class PFPAnalyzer(BaseAnalyzer):
             all_phases.update(fpc_result.get('phases_detected', []))
         
         
-        pfp_score = self.calculator.calculate_pfp(n_total, n_ml, n_etapas)
-        purity_level = self.calculator.get_purity_level(pfp_score)
+        ccpp_score = self.calculator.calculate_ccpp(n_total, n_ml, n_etapas)
+        purity_level = self.calculator.get_purity_level(ccpp_score)
         
         return {
             "total_modules": n_total,
@@ -120,7 +120,7 @@ class PFPAnalyzer(BaseAnalyzer):
             "unique_stages_found": n_etapas,
             "stage_types": sorted(list(all_stages)),
             "phases_detected": sorted(list(all_phases)),
-            "pfp_score": pfp_score,
+            "ccpp_score": ccpp_score,
             "purity_level": purity_level,
             "modules": modules_info
         }
@@ -159,13 +159,13 @@ class PFPAnalyzer(BaseAnalyzer):
                 "metrics": {
                     "total_modules": data['total_modules'],
                     "ml_modules": data['ml_modules'],
-                    "pfp_score": data['pfp_score'],
+                    "ccpp_score": data['ccpp_score'],
                     "purity_level": data['purity_level']
                 },
                 "phases_detected": data['phases_detected'],
                 "stages_detected": data['stage_types'],
                 "quality_indicators": {
-                    "needs_refactoring": data['pfp_score'] < 0.6,
+                    "needs_refactoring": data['ccpp_score'] < 0.6,
                     "has_ml_content": data['ml_modules'] > 0,
                     "is_pure_package": data['ml_modules'] == data['total_modules'] and data['unique_stages_found'] == 1
                 },

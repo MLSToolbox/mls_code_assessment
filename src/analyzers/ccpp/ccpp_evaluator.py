@@ -3,29 +3,29 @@ import os
 from ..base_evaluator import BaseEvaluator
 
 
-class PFPEvaluator(BaseEvaluator):
+class CCPPEvaluator(BaseEvaluator):
     """
-    Evaluator for PFP (Package Functional Purity) metrics.
+    Evaluator for CCPP (Conceptual Cohesion of Pipeline Packages) metrics.
     Matches calculated package-level metrics against predefined rules
     to generate diagnosis and recommendations.
     """
     
     def __init__(self):
         """
-        Initialize PFP evaluator with rules from pfp_rules.json.
+        Initialize CCPP evaluator with rules from ccpp_rules.json.
         """
         rules_path = os.path.join(
             os.path.dirname(__file__),
-            'pfp_rules.json'
+            'ccpp_rules.json'
         )
         super().__init__(rules_path)
     
     def _match_rule(self, metrics: Dict) -> Optional[Dict]:
         """
-        Match PFP package metrics against evaluation rules.
+        Match CCPP package metrics against evaluation rules.
         
         Args:
-            metrics: Dictionary containing PFP package metrics
+            metrics: Dictionary containing CCPP package metrics
         
         Returns:
             Matched rule dict or None if no match found
@@ -40,7 +40,12 @@ class PFPEvaluator(BaseEvaluator):
             
             # Check number_of_phases condition
             if 'number_of_phases' in conditions:
-                if conditions['number_of_phases'] != number_of_phases:
+                phase_cond = conditions['number_of_phases']
+                if isinstance(phase_cond, str) and phase_cond.startswith(">"):
+                    threshold = int(phase_cond[1:])
+                    if number_of_phases <= threshold:
+                        continue
+                elif phase_cond != number_of_phases:
                     continue
             
             # Check number_of_stages condition
@@ -101,7 +106,7 @@ class PFPEvaluator(BaseEvaluator):
         
         Args:
             package_path: Path to the package
-            package_metrics: Dictionary with package PFP metrics
+            package_metrics: Dictionary with package CCPP metrics
             
         Returns:
             Evaluation result dict with diagnosis, recommendation, and severity,
@@ -138,7 +143,7 @@ class PFPEvaluator(BaseEvaluator):
             'number_of_stages': number_of_stages,
             'ml_ratio': ml_ratio,
             'average_elems_per_stage': average_elems_per_stage,
-            'pfp_score': package_metrics.get('pfp_score', 0.0),
+            'ccpp_score': package_metrics.get('ccpp_score', 0.0),
             'ml_modules': ml_modules,
             'total_modules': total_modules
         }
@@ -159,7 +164,8 @@ class PFPEvaluator(BaseEvaluator):
         # Prepare template variables
         template_vars = {
             'package_name': package_name,
-            'pfp_score': package_metrics.get('pfp_score', 0.0)
+            'ccpp_score': package_metrics.get('ccpp_score', 0.0),
+            'pfp_score': package_metrics.get('ccpp_score', 0.0)
         }
         
         # Format diagnosis and recommendation

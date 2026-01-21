@@ -224,17 +224,17 @@ METRICS_REGISTRY = {
         category="cohesion"
     ),
     
-    "pfp": MetricMetadata(
-        metric_id="pfp",
-        name="Package Functional Purity",
+    "ccpp": MetricMetadata(
+        metric_id="ccpp",
+        name="Conceptual Cohesion of Pipeline Packages",
         description=(
             "Measures how focused a package is on a specific ML pipeline function. Evaluates "
             "the concentration of ML-related modules within a package and penalizes packages "
-            "that span multiple pipeline stages. Higher PFP indicates better package cohesion "
+            "that span multiple pipeline stages. Higher CCPP indicates better package cohesion "
             "and adherence to single responsibility principle."
         ),
         formula=(
-            "PFP = (n_ml / n_total) × CF, where CF = 1 - ((n_stages - 1) / (MAX_STAGES - 1)). "
+            "CCPP = (n_ml / n_total) × CF, where CF = 1 - ((n_stages - 1) / (MAX_STAGES - 1)). "
             "n_ml = ML modules in package, n_total = total modules, n_stages = unique stages detected, "
             "CF = concentration factor that penalizes stage dispersion."
         ),
