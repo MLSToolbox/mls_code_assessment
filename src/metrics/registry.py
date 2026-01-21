@@ -67,9 +67,9 @@ METRICS_REGISTRY = {
         category="quality"
     ),
     
-    "fpc": MetricMetadata(
-        metric_id="fpc",
-        name="Functional Pipeline Cohesion",
+    "ccpm": MetricMetadata(
+        metric_id="ccpm",
+        name="Conceptual Cohesion of Pipeline Modules",
         description=(
             "Measures cohesion of ML pipeline code by analyzing how well functions and classes "
             "are organized around specific ML pipeline stages. Higher cohesion indicates better "
@@ -78,17 +78,53 @@ METRICS_REGISTRY = {
             "files (loose code without functions) for pipeline stage alignment."
         ),
         formula=(
-            "FPC = Weighted average of cohesion levels. "
-            "High cohesion (10 pts): single stage. "
-            "Medium cohesion (6 pts): single phase, multiple stages. "
-            "Low cohesion (3 pts): multiple phases. "
-            "Script-style files are analyzed as a single unit for stage detection."
+            "CCPM uses a 5-level qualitative evaluation to detect modules mixing responsibilities "
+            "from different ML pipeline tasks/stages (SRP violations).\n\n"
+            "=== DECISION TABLE ===\n"
+            "Stages | Phases | ML_Only | NLOC>30 | Level      | Points | Interpretation\n"
+            "-------|--------|---------|---------|------------|--------|------------------\n"
+            "1      | 1      | Yes     | Yes     | very_high  | 10     | Perfect SRP: Single stage, pure ML\n"
+            "1      | 1      | No      | Yes     | high       | 8      | Single stage + non-ML code mixed\n"
+            "1      | 1      | Yes/No  | No      | high       | 8      | Single stage but small file (<30 lines)\n"
+            ">1     | 1      | Yes/No  | Yes/No  | medium     | 5      | Multiple stages, same phase (related)\n"
+            "≥1     | ≥2     | Yes     | Yes/No  | low        | 3      | Mixes unrelated phases, ML only\n"
+            "≥1     | ≥2     | No      | Yes/No  | very_low   | 1      | Mixes unrelated phases + non-ML code\n"
+            "0      | -      | -       | -       | non_ml_file| -      | No ML content (not scored)\n\n"
+            "=== CALCULATION PROCESS ===\n"
+            "1. Pipeline Stage Detection (pipeline_stages.json):\n"
+            "   - Stages: data_collection, data_cleaning, feature_engineering, model_training, model_evaluation\n"
+            "   - Detection via: keywords, imports, filename patterns, pipeline metadata\n\n"
+            "2. Phase Grouping:\n"
+            "   - data_engineering = {data_collection, data_cleaning}\n"
+            "   - model_development = {feature_engineering, model_training, model_evaluation}\n\n"
+            "3. ML Content Analysis (ml_content_config.json):\n"
+            "   - ml_content_only=True: Only ML pipeline code\n"
+            "   - ml_content_only=False: Mixed ML + non-ML (GUI, web frameworks, utilities)\n\n"
+            "4. NLOC Calculation (Non-comment Lines of Code):\n"
+            "   - Threshold: 30 lines\n"
+            "   - Rationale: Small modules (<30) with multiple stages don't severely violate SRP\n\n"
+            "5. Cohesion Level Assignment:\n"
+            "   - _determine_cohesion_level() applies decision table\n\n"
+            "6. Aggregate Score Calculation:\n"
+            "   CCPM_Score = (Σ points_i / (n × 10)) × 10\n"
+            "   where n = number of ML files (excludes non_ml_file)\n"
+            "   Result normalized to 0-10 scale\n\n"
+            "=== IMPLEMENTATION METHODS (ccpm_analyzer.py) ===\n"
+            "• _detect_stages(): Maps keywords/imports/patterns → ML stages\n"
+            "• MLContentAnalyzer.analyze(): Detects non-ML code using ml_content_config.json\n"
+            "• NLOCCalculator.calculate(): Counts non-comment lines\n"
+            "• _determine_cohesion_level(): Assigns level per decision table\n"
+            "• _calculate_cohesion_score(): Aggregates file scores to project score\n\n"
+            "=== EVALUATION (ccpm_evaluator.py) ===\n"
+            "Matches metrics against ccpm_rules.json (10 rules) to generate diagnosis and recommendations."
         ),
         ideal_range={"min": 0, "max": 10, "optimal": ">7.0", "acceptable": "5.0-7.0", "warning": "<5.0"},
         interpretation={
-            "high (7.0-10.0)": "Well-organized ML pipeline code with clear separation of concerns",
-            "medium (4.0-6.9)": "Code organization is acceptable but could benefit from better structure",
-            "low (0-3.9)": "Poorly organized code, consider restructuring around ML pipeline stages. Script-style files should be refactored into functions."
+            "very_high (10)": "Excellent - Single stage, pure ML code, optimal SRP compliance",
+            "high (8)": "Good - Single stage or phase with minor impurities or small multi-stage modules",
+            "medium (5)": "Moderate - Multiple stages in same phase or mixed ML/non-ML code",
+            "low (3)": "Poor - Multiple phases mixed, violates SRP, needs refactoring",
+            "very_low (1)": "Critical - Multiple phases + non-ML code mixed, severe SRP violation"
         },
         references=["https://github.com/MLS-Toobox/mls_code_generator"],
         category="cohesion"
@@ -144,212 +180,267 @@ METRICS_REGISTRY = {
         references=["https://github.com/MLS-Toobox/mls_code_generator"],
         category="detection"
     ),
-    
-    "lccml": MetricMetadata(
-        metric_id="lccml",
-        name="Loose Class Cohesion Modified for ML",
-        description=(
-            "Measures module cohesion specifically for ML code by analyzing connectivity between "
-            "methods based on shared access to variables, data/model files, ML library functions, "
-            "and direct method calls. Extended version of LCOM4 adapted for ML pipelines. "
-            "Operates at module level (not class level) to handle both OO and script-style code."
-        ),
-        formula=(
-            "LCCML = (Mv ∪ Mf ∪ Ml ∪ Mc) / (n(n-1)/2), where: "
-            "n = number of methods in file, "
-            "Mv = pairs connected by shared variables, "
-            "Mf = pairs connected by shared data/model files, "
-            "Ml = pairs connected by shared ML library functions, "
-            "Mc = pairs connected by direct method calls (A calls B or B calls A)"
-        ),
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.7", "acceptable": "0.5-0.7", "warning": "<0.5"},
-        interpretation={
-            "0.8-1.0": "Excellent - highly cohesive module, methods work together well",
-            "0.6-0.79": "Good - reasonable cohesion, minor improvements possible",
-            "0.4-0.59": "Moderate - consider refactoring to improve method connectivity",
-            "0.2-0.39": "Low - module likely doing too many unrelated things",
-            "0.0-0.19": "Very Low - module should be split into separate files"
-        },
-        references=[
-            "Loose Class Cohesion (LCC) - Bieman & Kang, 1995",
-            "LCOM4 - Hitz & Montazeri, 1995",
-            "Adapted for ML pipelines - considers data files and ML library usage"
-        ],
-        category="cohesion"
-    ),
 
-    "ldsc": MetricMetadata(
-        metric_id="ldsc",
-        name="Linked Data Structure Cohesion",
+    "scpm": MetricMetadata(
+        metric_id="scpm",
+        name="Structural Cohesion of Pipeline Modules",
         description=(
-            "Measures how much functions within a module share data or structures. "
-            "High values indicate that functions are tightly coupled through shared data."
+            "Measures how much functions within a module share DATA or STRUCTURES. "
+            "Higher values indicate that methods are tightly coupled through shared data access, "
+            "which suggests good structural cohesion. Focuses on structural connections only "
+            "(variables and files), excluding functional connections (method calls)."
         ),
         formula=(
-            "LDSC = (2 * sum(P_ij)) / (n * (n-1)), where P_ij = 1 if functions i and j "
-            "share at least one significant variable or data structure."
+            "=== MATHEMATICAL FORMULA ===\n"
+            "SCPM = LDSC(M) = (2 × Σ(i<j) P_ij) / (n × (n - 1))\n\n"
+            "Where:\n"
+            "• n = number of methods/functions in the module\n"
+            "• P_ij = 1 if methods i and j share at least one data structure or file\n"
+            "• P_ij = 0 otherwise\n"
+            "• Result range: [0.0, 1.0] (0 = minimum cohesion, 1 = maximum cohesion)\n\n"
+            "=== WHAT COUNTS AS SHARED (P_ij = 1) ===\n"
+            "Methods share if they access at least one common:\n"
+            "1. Class attributes: self.attribute_name\n"
+            "2. Module-level global variables:\n"
+            "   - UPPERCASE constants (e.g., CONFIG, DATA_PATH)\n"
+            "   - _private variables (e.g., _cache, _model)\n"
+            "   - Common ML globals (data, model, X_train, y_train, scaler, etc.)\n"
+            "3. Data files: .csv, .parquet, .json, .xlsx, .feather, .avro, etc.\n"
+            "4. Model files: .pkl, .h5, .pt, .ckpt, .pb, .onnx, .weights, etc.\n"
+            "5. Config files: .yaml, .yml, .ini, .cfg, .toml, etc.\n\n"
+            "=== CALCULATION PROCESS (scpm_analyzer.py) ===\n\n"
+            "Step 1: Extract Methods\n"
+            "  • _extract_methods(): Parse AST to get all functions and class methods\n"
+            "  • Qualified names: ClassName.method_name or function_name\n\n"
+            "Step 2: Detect Variables Accessed\n"
+            "  • _get_variables_accessed(method_node):\n"
+            "    - Scans AST for ast.Attribute nodes → detects self.x\n"
+            "    - Scans ast.Name nodes → detects global variables\n"
+            "  • Enhanced heuristics:\n"
+            "    ✓ Includes: UPPERCASE (>1 char), _private, common ML names\n"
+            "    ✗ Excludes: builtins (list, dict, str), imports (pd, np, os),\n"
+            "                ML types (DataFrame, Tensor), locals (result, temp, i, j),\n"
+            "                type suffixes (Type, Class, Error)\n\n"
+            "Step 3: Detect Files Accessed\n"
+            "  • _get_files_accessed(method_node):\n"
+            "    - Scans for string literals containing file extensions\n"
+            "    - 30+ ML file extensions supported (data, model, config files)\n\n"
+            "Step 4: Build Connectivity Graph\n"
+            "  For each pair of methods (i, j) where i < j:\n"
+            "    shared_vars = vars_i ∩ vars_j    # Set intersection of variables\n"
+            "    shared_files = files_i ∩ files_j  # Set intersection of files\n"
+            "    \n"
+            "    if shared_vars OR shared_files:\n"
+            "      P_ij = 1\n"
+            "      adjacency[i].add(j)  # Add edge to graph\n"
+            "      adjacency[j].add(i)\n"
+            "    else:\n"
+            "      P_ij = 0\n\n"
+            "Step 5: Calculate SCPM Score\n"
+            "  total_pairs = n × (n - 1) / 2\n"
+            "  shared_pairs = count of pairs where P_ij = 1\n"
+            "  SCPM = (2 × shared_pairs) / (n × (n - 1))\n"
+            "       = shared_pairs / total_pairs\n\n"
+            "Step 6: LCOM Analysis (Lack of Cohesion of Methods)\n"
+            "  • count_components(adjacency, methods):\n"
+            "    - Uses DFS (Depth-First Search) on connectivity graph\n"
+            "    - Finds disconnected groups of methods\n"
+            "    - n_components > 1 → module violates SRP, should split\n"
+            "  • identify_disconnected_methods(adjacency, methods):\n"
+            "    - Finds methods with NO connections (isolated nodes)\n"
+            "    - Candidates for extraction to separate modules\n"
+            "  • Special methods (__init__, __str__) excluded from LCOM analysis\n\n"
+            "Step 7: Classify Sharing Type\n"
+            "  • _determine_shared_type(shared_vars, shared_files):\n"
+            "    - 'class_attributes': >50% are self.x\n"
+            "    - 'global_variables': >50% are module-level globals\n"
+            "    - 'files': >50% are shared files\n"
+            "    - 'mixed': No single type dominates\n\n"
+            "Step 8: Categorize Cohesion Level\n"
+            "  • _categorize_cohesion(scpm):\n"
+            "    [0.8-1.0]: very_high\n"
+            "    [0.6-0.8): high\n"
+            "    [0.4-0.6): medium\n"
+            "    [0.2-0.4): low\n"
+            "    [0.0-0.2): very_low\n\n"
+            "=== EXAMPLE CALCULATION ===\n"
+            "Module with 4 methods: f1, f2, f3, f4\n"
+            "Shared data:\n"
+            "  f1 & f2: share self.data\n"
+            "  f1 & f3: share 'model.pkl'\n"
+            "  f2 & f3: share CONFIG\n"
+            "  f4: shares nothing\n\n"
+            "Total pairs = 4×3/2 = 6 pairs\n"
+            "Shared pairs = 3 (f1-f2, f1-f3, f2-f3)\n"
+            "SCPM = 3/6 = 0.50 → medium cohesion\n"
+            "n_components = 2 (group {f1,f2,f3} and isolated {f4})\n"
+            "disconnected_methods = ['f4']\n\n"
+            "=== EVALUATION (scpm_evaluator.py) ===\n"
+            "Matches metrics against scpm_rules.json (14 rules) considering:\n"
+            "• cohesion_level, n_components, n_disconnected_methods\n"
+            "• shared_variable_count, shared_file_count, shared_type\n"
+            "• Generates specific diagnosis and refactoring recommendations"
         ),
         ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
         interpretation={
-            "0.8-1.0": "Excellent - Maximum structural cohesion",
-            "0.6-0.79": "Good - High data sharing",
-            "0.4-0.59": "Moderate - Some data sharing",
-            "0.2-0.39": "Low - Little data sharing",
-            "0.0-0.19": "Very Low - Minimal structural cohesion"
+            "very_high (0.8-1.0)": "Excellent - Maximum structural cohesion, methods highly interconnected through shared data",
+            "high (0.6-0.79)": "Good - Strong data sharing between methods, well-organized module",
+            "medium (0.4-0.59)": "Moderate - Some data sharing exists, consider improving organization",
+            "low (0.2-0.39)": "Poor - Weak structural connections, methods operate too independently",
+            "very_low (0.0-0.19)": "Critical - Minimal data sharing, module likely violates SRP, needs refactoring"
         },
-        references=["Internal Definition"],
+        references=["LDSC - Local Data Structure Cohesion (Internal Definition)"],
         category="cohesion"
     ),
 
-    "ifc_m": MetricMetadata(
-        metric_id="ifc_m",
-        name="Information Flow Cohesion - Modified",
+    "fcpm": MetricMetadata(
+        metric_id="fcpm",
+        name="Functional Cohesion of Pipeline Modules",
         description=(
-            "Measures functional connection between functions via information flow. "
-            "Considers direct method invocations and data flow (producer-consumer relationships)."
+            "Measures functional cohesion through method invocation patterns. "
+            "Analyzes how methods collaborate by calling each other (directly or indirectly), "
+            "indicating if they work together toward a common functional goal. Complementary "
+            "to SCPM (structural cohesion), focusing on behavioral relationships rather than data sharing."
         ),
         formula=(
-            "IFC-M = (2 * sum(F_ij)) / (n * (n-1)), where F_ij = 1 if function i calls j "
-            "OR i consumes data produced by j."
-        ),
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.7", "acceptable": "0.5-0.7", "warning": "<0.5"},
-        interpretation={
-            "0.8-1.0": "Excellent - High functional cohesion",
-            "0.6-0.79": "Good - Functions are well connected",
-            "0.4-0.59": "Moderate - Some functional connections",
-            "0.2-0.39": "Low - Few functional connections",
-            "0.0-0.19": "Very Low - Functions operate independently"
-        },
-        references=["Internal Definition"],
-        category="cohesion"
-    ),
-    
-    "pfp": MetricMetadata(
-        metric_id="pfp",
-        name="Package Functional Purity",
-        description=(
-            "Measures how focused a package is on a specific ML pipeline function. Evaluates "
-            "the concentration of ML-related modules within a package and penalizes packages "
-            "that span multiple pipeline stages. Higher PFP indicates better package cohesion "
-            "and adherence to single responsibility principle."
-        ),
-        formula=(
-            "PFP = (n_ml / n_total) × CF, where CF = 1 - ((n_stages - 1) / (MAX_STAGES - 1)). "
-            "n_ml = ML modules in package, n_total = total modules, n_stages = unique stages detected, "
-            "CF = concentration factor that penalizes stage dispersion."
-        ),
-        ideal_range={
-            "min": 0.0,
-            "max": 1.0,
-            "optimal": ">0.8",
-            "acceptable": "0.6-0.8",
-            "warning": "<0.6"
-        },
-        interpretation={
-            "High (0.8-1.0)": "Excellent package purity - focused on single pipeline function with high ML content",
-            "Moderate (0.6-0.79)": "Acceptable purity - package is reasonably focused but has room for improvement",
-            "Low (0.4-0.59)": "Poor purity - package handles multiple stages or has low ML content, refactoring recommended",
-            "Very Low (0.0-0.39)": "Critical purity issues - package lacks clear purpose, immediate refactoring needed"
-        },
-        references=[
-            "https://github.com/MLS-Toobox/mls_code_generator",
-            "Single Responsibility Principle - Clean Code by Robert C. Martin"
-        ],
-        category="cohesion"
-    ),
-
-    "pdsc": MetricMetadata(
-        metric_id="pdsc",
-        name="Package Data Structure Cohesion",
-        description=(
-            "Measures the structural sharing of data or models between modules of the same package. "
-            "High values indicate that modules within a package are tightly coupled through shared resources."
-        ),
-        formula=(
-            "PDSC(P) = (2 * sum(Q_ij)) / (m * (m - 1)), where Q_ij = 1 if modules i and j "
-            "access or modify the same data structures or resources."
+            "=== MATHEMATICAL FORMULA ===\n"
+            "FCPM = (2 × Σ(i<j) F_ij) / (n × (n - 1))\n\n"
+            "Where:\n"
+            "• n = number of methods/functions in the module\n"
+            "• F_ij = 1 if methods i and j have functional relationship (direct or indirect invocation)\n"
+            "• F_ij = 0 otherwise\n"
+            "• Result range: [0.0, 1.0] (0 = minimum cohesion, 1 = maximum cohesion)\n\n"
+            "=== CONDITIONS FOR F_ij = 1 (Functional Connection) ===\n\n"
+            "Two methods i and j are functionally connected if ANY of:\n\n"
+            "1. **Direct Invocation (Method Calls Method)**:\n"
+            "   • f_i → f_j  (method i calls method j)\n"
+            "   • f_j → f_i  (method j calls method i)\n"
+            "   • Bidirectional relationship (either direction counts)\n\n"
+            "2. **Indirect Invocation (Both Call Common Helper)**:\n"
+            "   • f_i → f_t AND f_j → f_t\n"
+            "   • Both methods call a third function f_t\n"
+            "   • CRITICAL: f_t must belong to the SAME module/class\n"
+            "   • Represents collaboration through shared helper functions\n\n"
+            "If neither condition is met: F_ij = 0\n\n"
+            "=== CALCULATION PROCESS (fcpm_analyzer.py) ===\n\n"
+            "Step 1: Extract Methods\n"
+            "  • _extract_methods(): Parse AST to get all functions and class methods\n"
+            "  • Qualified names: ClassName.method_name or function_name\n\n"
+            "Step 2: Build Call Graph\n"
+            "  • _build_call_graph(methods):\n"
+            "    - For each method, detect which other methods it calls\n"
+            "    - Returns: {method_name: [list of methods it calls]}\n"
+            "  • _get_method_calls(method_node, all_methods):\n"
+            "    - Scans AST for ast.Call nodes\n"
+            "    - Identifies function names from ast.Name and ast.Attribute\n"
+            "    - Matches against all_methods to find internal calls\n\n"
+            "Step 3: Detect Connected Pairs\n"
+            "  For each pair of methods (i, j) where i < j:\n"
+            "  \n"
+            "    # Check DIRECT invocation\n"
+            "    is_direct = (j in call_graph[i]) OR (i in call_graph[j])\n"
+            "    \n"
+            "    # Check INDIRECT invocation\n"
+            "    calls_i = set(call_graph[i])\n"
+            "    calls_j = set(call_graph[j])\n"
+            "    common_callees = calls_i ∩ calls_j\n"
+            "    common_internal = common_callees ∩ {methods in same module}\n"
+            "    is_indirect = (common_internal ≠ ∅)\n"
+            "    \n"
+            "    # Set F_ij\n"
+            "    if is_direct OR is_indirect:\n"
+            "      F_ij = 1\n"
+            "      connected_pairs.append((i, j))\n"
+            "      adjacency[i].append(j)  # Add edge to graph\n"
+            "      adjacency[j].append(i)\n"
+            "      \n"
+            "      if is_direct:\n"
+            "        direct_invocations += 1\n"
+            "      else:  # is_indirect\n"
+            "        indirect_invocations += 1\n"
+            "    else:\n"
+            "      F_ij = 0\n\n"
+            "Step 4: Calculate FCPM Score\n"
+            "  total_pairs = n × (n - 1) / 2\n"
+            "  n_connected_pairs = count of pairs where F_ij = 1\n"
+            "  FCPM = (2 × n_connected_pairs) / (n × (n - 1))\n"
+            "       = n_connected_pairs / total_pairs\n\n"
+            "Step 5: LCOM Analysis (Lack of Cohesion of Methods)\n"
+            "  • count_components(adjacency, methods):\n"
+            "    - Uses DFS on functional connectivity graph\n"
+            "    - Finds disconnected functional groups (workflows)\n"
+            "    - n_components > 1 → module contains independent workflows\n"
+            "  • identify_disconnected_methods(adjacency, methods):\n"
+            "    - Finds methods with NO invocation relationships\n"
+            "    - Methods that neither call nor are called by others\n"
+            "  • Special methods (__init__, __str__) excluded from LCOM\n\n"
+            "Step 6: Categorize Cohesion Level\n"
+            "  • _categorize_cohesion(fcpm):\n"
+            "    [0.8-1.0]: very_high\n"
+            "    [0.6-0.8): high\n"
+            "    [0.4-0.6): medium\n"
+            "    [0.2-0.4): low\n"
+            "    [0.0-0.2): very_low\n\n"
+            "=== EXAMPLE CALCULATION ===\n\n"
+            "Module with 4 methods: f1, f2, f3, f4\n\n"
+            "Call graph:\n"
+            "  f1 calls: [f2, helper]\n"
+            "  f2 calls: [helper]\n"
+            "  f3 calls: [f2]\n"
+            "  f4 calls: []\n"
+            "  helper calls: []\n\n"
+            "Analysis:\n"
+            "  f1-f2: DIRECT (f1 → f2) → F_12 = 1\n"
+            "  f1-f3: INDIRECT (both call helper) → F_13 = 1\n"
+            "  f1-f4: NO connection → F_14 = 0\n"
+            "  f2-f3: DIRECT (f3 → f2) → F_23 = 1\n"
+            "  f2-f4: NO connection → F_24 = 0\n"
+            "  f3-f4: NO connection → F_34 = 0\n\n"
+            "Wait, let me recalculate including helper:\n"
+            "  n = 5 methods (f1, f2, f3, f4, helper)\n"
+            "  total_pairs = 5×4/2 = 10 pairs\n"
+            "  \n"
+            "  Connected pairs:\n"
+            "  • f1-f2: DIRECT ✓\n"
+            "  • f1-helper: DIRECT ✓\n"
+            "  • f2-helper: DIRECT ✓\n"
+            "  • f2-f3: DIRECT ✓\n"
+            "  • f1-f2: INDIRECT via helper (already counted as direct)\n"
+            "  \n"
+            "  n_connected = 4\n"
+            "  FCPM = 4/10 = 0.40 → medium cohesion\n"
+            "  \n"
+            "  n_components = 2 (group {f1,f2,f3,helper} and isolated {f4})\n"
+            "  disconnected_methods = ['f4']\n"
+            "  breakdown:\n"
+            "    direct_invocations: 4\n"
+            "    indirect_invocations: 0 (already counted in direct)\n\n"
+            "=== BREAKDOWN METRICS ===\n\n"
+            "The analysis provides:\n"
+            "• direct_invocations: Count of pairs connected by direct calls\n"
+            "• indirect_invocations: Count of pairs connected ONLY via common helper\n"
+            "• Note: A pair can't be both (direct takes precedence)\n\n"
+            "=== EVALUATION (fcpm_evaluator.py) ===\n\n"
+            "Matches metrics against fcpm_rules.json (14 rules) considering:\n"
+            "• cohesion_level: very_low | low | medium | high | very_high\n"
+            "• n_components: Number of disconnected functional groups\n"
+            "• n_disconnected_methods: Count of methods with no connections\n"
+            "• disconnected_methods: List of isolated method names\n"
+            "• breakdown: {direct_invocations, indirect_invocations}\n\n"
+            "Generates diagnosis and recommendations, often cross-referencing SCPM:\n"
+            "• Low FCPM + Low SCPM → Extract to separate modules\n"
+            "• Low FCPM + High SCPM → Methods share data but don't collaborate\n"
+            "• High FCPM + Low SCPM → Methods collaborate but don't share state"
         ),
         ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
         interpretation={
-            "0.8-1.0": "Excellent - Maximum structural cohesion",
-            "0.6-0.79": "Good - High resource sharing",
-            "0.4-0.59": "Moderate - Some resource sharing",
-            "0.2-0.39": "Low - Little resource sharing",
-            "0.0-0.19": "Very Low - Minimal structural cohesion"
+            "very_high (0.8-1.0)": "Excellent - Maximum functional cohesion, methods highly interconnected via invocations",
+            "high (0.6-0.79)": "Good - Strong functional collaboration between methods",
+            "medium (0.4-0.59)": "Moderate - Some invocation relationships exist",
+            "low (0.2-0.39)": "Poor - Weak functional connections, methods operate too independently",
+            "very_low (0.0-0.19)": "Critical - Minimal invocations, methods likely violate SRP, needs refactoring"
         },
-        references=["Internal Definition"],
-        category="cohesion"
-    ),
-    
-    "pmcr": MetricMetadata(
-        metric_id="pmcr",
-        name="Package Module Cohesion Ratio",
-        description=(
-            "Measures the proportion of modules in a package that are interconnected, "
-            "considering both code dependencies and shared ML resources (datasets, models, APIs). "
-            "Adapts the Connected Pairs Ratio concept to the package level."
-        ),
-        formula=(
-            "PMCR(P) = Mc / (n(n-1)/2), where Mc = number of connected module pairs "
-            "(direct or indirect), n = total modules in package."
-        ),
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
-        interpretation={
-            "0.8-1.0": "Excellent - Highly cohesive package",
-            "0.6-0.79": "Good - Strong module interconnection",
-            "0.4-0.59": "Moderate - Some isolated modules",
-            "0.2-0.39": "Low - Many isolated modules",
-            "0.0-0.19": "Very Low - Fragmented package"
-        },
-        references=["Internal Definition"],
-        category="cohesion"
-    ),
-
-    "ifc_p": MetricMetadata(
-        metric_id="ifc_p",
-        name="Information Flow Cohesion - Package",
-        description=(
-            "Measures the functional cooperation between modules of a package via information flow. "
-            "Considers module invocations and data consumption (imports)."
-        ),
-        formula=(
-            "IFC-P(P) = (2 * sum(F_ij)) / (m * (m - 1)), where F_ij = 1 if module i invokes module j "
-            "or consumes its data."
-        ),
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
-        interpretation={
-            "0.8-1.0": "Excellent - High functional coupling within package",
-            "0.6-0.79": "Good - Modules are well connected",
-            "0.4-0.59": "Moderate - Some connections between modules",
-            "0.2-0.39": "Low - Few connections, loose package",
-            "0.0-0.19": "Very Low - Modules are independent"
-        },
-        references=["Internal Definition"],
-        category="cohesion"
-    ),
-    
-    "lpcml": MetricMetadata(
-        metric_id="lpcml",
-        name="Loose Package Cohesion Modified for ML",
-        description=(
-            "Measures the number of connected components within a package. "
-            "A connected component represents a group of modules related through "
-            "dependencies, shared data, model files, or ML library usage. "
-            "Lower values indicate better cohesion (ideally 1 component)."
-        ),
-        formula=(
-            "LPCML(P) = |CC(G_P)|, where G_P = (V, E) is the undirected dependency graph. "
-            "V = first-level elements (modules/subpackages), "
-            "E = edges exist when elements share resources (non-empty intersection)."
-        ),
-        ideal_range={"min": 1, "max": None, "optimal": "1", "acceptable": "2-3", "warning": ">3"},
-        interpretation={
-            "1": "Excellent - All modules form a single cohesive unit",
-            "2-3": "Acceptable - Package has few disconnected subgroups",
-            "4-5": "Moderate - Package fragmentation, consider reorganization",
-            ">5": "Poor - Highly fragmented package, refactoring needed"
-        },
-        references=["Internal Definition - Graph Theory Applied to ML Package Structure"],
+        references=["FCPM - Functional Cohesion of Pipeline Modules (Internal Definition)"],
         category="cohesion"
     ),
 }

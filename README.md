@@ -28,9 +28,11 @@ Ejecuta analizadores sobre sesión existente:
 - `radon_cc` - Complejidad ciclomática
 - `radon_mi` - Índice de mantenibilidad
 - `pipeline` - Detección de etapas ML
-- `fpc` - Cohesión funcional pipeline
+- `ccpm` - Cohesión Conceptual de Módulos Pipeline
+- `scpm` - Cohesión Estructural de Módulos Pipeline
+- `fcpm` - Cohesión Funcional de Módulos Pipeline
 - `file_structure` - Estructura de directorios
-- `lccml` - Cohesión de clases ML
+- `ml_content` - Detección de contenido ML/no-ML
 
 ## Arquitectura
 
@@ -56,12 +58,13 @@ src/
 - `middleware.py` - CORS y logging
 
 **`analyzers/`** - Motores de análisis de código
-- `base_analyzer.py` - Clase abstracta base
+- `base_analyzer.py` - Clase abstracta base para analizadores
+- `base_evaluator.py` - Clase base para evaluadores de reglas
 - `factory.py` - Factory pattern para crear analizadores
 - `pipeline/` - Analizador de pipeline ML (stages, overrides, config)
-- `fpc/` - Functional Pipeline Cohesion
-- `ml_content/` - Detección de contenido ML
-- Analizadores individuales: `pylint_analyzer.py`, `radon_cc_analyzer.py`, etc.
+- `ccpm/` - Conceptual Cohesion of Pipeline Modules (migrado)
+- `ml_content/` - Detección de contenido ML vs non-ML
+- Analizadores individuales: `pylint_analyzer.py`, `radon_cc_analyzer.py`, `scpm_analyzer.py`, `fcpm_analyzer.py`, `lccml_analyzer.py`
 
 **`core/`** - Componentes centrales reutilizables
 - `analysis_result.py` - Modelo de resultado de análisis
@@ -82,7 +85,7 @@ src/
 - `file_handler.py` - Manejo de ZIP files
 - `cleanup_scheduler.py` - Limpieza automática de sesiones expiradas
 
-## Principios de diseño
+## Principios de diseño aplicados
 
 ### **SOLID**
 - **Single Responsibility**: Cada clase tiene una responsabilidad única
