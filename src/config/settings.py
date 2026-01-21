@@ -35,10 +35,10 @@ class Settings:
     
     # Session settings
     SESSION_BASE_PATH: str = os.getenv('SESSION_BASE_PATH', '/tmp/mls_sessions')
-    SESSION_TTL_MINUTES: int = int(os.getenv('SESSION_TTL_MINUTES', '60'))
+    SESSION_TTL_MINUTES: int = int(os.getenv('SESSION_TTL_MINUTES') or '60')
     
     # Cleanup scheduler settings
-    CLEANUP_INTERVAL_MINUTES: int = int(os.getenv('CLEANUP_INTERVAL_MINUTES', '30'))
+    CLEANUP_INTERVAL_MINUTES: int = int(os.getenv('CLEANUP_INTERVAL_MINUTES') or '30')
     
     # CORS settings
     CORS_ORIGINS: str = os.getenv('CORS_ORIGINS', '*')
