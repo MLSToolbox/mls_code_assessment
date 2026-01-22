@@ -5,6 +5,15 @@ from typing import Dict, List, Any, Optional
 class FCPPEvaluator:
     """
     Evaluator that matches FCPP (Package-Level Functional) metrics against rules.
+    
+    It applies rules defined in 'fcpp_rules.json' to diagnose cohesion issues based on:
+    1. FCPP Score (0.0 to 1.0)
+    2. LCOM Analysis:
+       - Isolated Nodes: Modules that do not call any other module.
+       - Disconnected Groups: Sets of modules that interact within the group but not with other groups.
+       
+    Example Recommendation logic:
+    - If n_groups > 1: "Package should be split into X smaller subpackages."
     """
     
     def __init__(self):
@@ -19,13 +28,9 @@ class FCPPEvaluator:
     def evaluate_package(self, package_path: str, metrics: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if metrics.get('fcpp') is None:
             return None
-
         eval_metrics = metrics.copy()
-        
-        # Prepare computed fields for rule matching
         isolated = eval_metrics.get('isolated_nodes', [])
         eval_metrics['isolated_nodes_count'] = len(isolated)
-        
         groups = eval_metrics.get('groups', [])
         eval_metrics['n_groups'] = len(groups) if len(groups) > 0 else 1
 

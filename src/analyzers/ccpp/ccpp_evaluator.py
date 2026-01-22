@@ -1,8 +1,6 @@
 from typing import Dict, Optional, Any, Set
 import os
 from ..base_evaluator import BaseEvaluator
-
-
 class CCPPEvaluator(BaseEvaluator):
     """
     Evaluator for CCPP (Conceptual Cohesion of Pipeline Packages) metrics.

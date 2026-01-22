@@ -8,14 +8,24 @@ from collections import defaultdict
 from core.analysis_context import AnalysisContext
 from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
-from analyzers.common.package_utils import get_package_nodes, is_package
+from analyzers.common.package_utils import get_package_nodes, is_package, find_connected_groups
 from analyzers.fcpp.fcpp_evaluator import FCPPEvaluator
-
-logger = logging.getLogger(__name__)
 
 class FCPPAnalyzer(BaseAnalyzer):
     """
     Analyzer for FCPP (Functional Cohesion of Pipeline Packages).
+    
+    Measures how much modules/subpackages within a package are related from the viewpoint of functional invocations.
+    
+    Let P be a package with m modules/subpackages.
+    F_ij = 1 if there exists a function in mi that invokes (directly or indirectly) a function in mj:
+    - Direct: mi -> mj OR mj -> mi
+    - Indirect: mi -> ... -> mj (intermediate nodes must be in P)
+    - Shared Target: mi -> mt AND mj -> mt (where mt is in P)
+    
+    Otherwise F_ij = 0.
+    
+    Formula: FCPP(P) = (2 * Sum_{i<j} F_ij) / (m * (m - 1))
     """
 
     def __init__(self, session_id: str, local_path: str, context: Optional[AnalysisContext] = None):
@@ -35,28 +45,20 @@ class FCPPAnalyzer(BaseAnalyzer):
                 'average_fcpp': 0.0
             }
         }
-        
-        # 1. Identify Packages
         package_dirs = set()
         for root, dirs, files in os.walk(self.local_path):
             if is_package(root):
                 package_dirs.add(root)
         
         fcpp_scores = []
-        possible_sibling_nodes = set()
-        # Pre-scan for possible cross-package resolution could be done here if needed
-        
         for package_path in package_dirs:
             graph_data = self._analyze_functional_connectivity(package_path)
             
             if graph_data['valid']:
                 m = graph_data['n_nodes']
-                connections = graph_data['connections_count'] # sum(F_ij)
-                
-                # Formula: (2 * Sum(F_ij)) / (m * (m - 1))
+                connections = graph_data['connections_count'] 
                 total_pairs = m * (m - 1)
                 fcpp_value = (2.0 * connections) / total_pairs if total_pairs > 0 else 0.0
-                
                 package_result = {
                     **graph_data,
                     'fcpp': round(fcpp_value, 3),
@@ -67,8 +69,6 @@ class FCPPAnalyzer(BaseAnalyzer):
                 rel_pkg_path = os.path.relpath(package_path, self.local_path)
                 results['packages'][rel_pkg_path] = package_result
                 fcpp_scores.append(fcpp_value)
-                
-                # Update Summary
                 if fcpp_value >= 0.8: results['summary']['very_high'] += 1
                 elif fcpp_value >= 0.6: results['summary']['high'] += 1
                 elif fcpp_value >= 0.4: results['summary']['medium'] += 1
@@ -110,12 +110,8 @@ class FCPPAnalyzer(BaseAnalyzer):
             return {'valid': False, 'n_nodes': m, 'nodes': [os.path.basename(n) for n in nodes]}
 
         node_to_idx = {n: i for i, n in enumerate(nodes)}
-        
-        # Build Symbol Table (File -> Node Index mapping + Definitions)
         file_to_node_idx = {}
-        definitions = defaultdict(list) # FuncName -> List[Node_Index]
-        
-        # Map internal files to Node Owner & Scan Definitions
+        definitions = defaultdict(list) 
         for idx, node_path in enumerate(nodes):
             if os.path.isfile(node_path):
                 file_to_node_idx[node_path] = idx
@@ -135,16 +131,12 @@ class FCPPAnalyzer(BaseAnalyzer):
                     for node in ast.walk(tree):
                         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                             definitions[node.name].append(idx)
-
-        # Build Adjacency Matrix (Directed)
         adj = defaultdict(lambda: defaultdict(set))
-        
         for f_path, owner_idx in file_to_node_idx.items():
             tree = self.context.get_file_ast(f_path)
             if not tree: continue
             
             imported_names = {}
-            # Pass definitions to resolve imports more accurately
             for node in ast.walk(tree):
                 if isinstance(node, (ast.Import, ast.ImportFrom)):
                     targets = self._resolve_import(node, f_path, package_path, nodes, node_to_idx, definitions)
@@ -169,7 +161,6 @@ class FCPPAnalyzer(BaseAnalyzer):
                          detail = f"{used_name} (in {os.path.basename(f_path)})"
                          adj[owner_idx][target].add(detail)
         
-        # Transitive Closure (Floyd-Warshall)
         R = [[False] * m for _ in range(m)]
         for u in range(m):
             R[u][u] = True
@@ -181,7 +172,6 @@ class FCPPAnalyzer(BaseAnalyzer):
                 for j in range(m):
                     R[i][j] = R[i][j] or (R[i][k] and R[k][j])
                     
-        # Calculate Connectivity F_ij & Groups
         connections_count = 0
         groups_adj = defaultdict(set)
         connections_list = []
@@ -189,70 +179,66 @@ class FCPPAnalyzer(BaseAnalyzer):
         for i in range(m):
             for j in range(i + 1, m):
                 connected = False
-                reason = "Unknown"
-                
-                # Direct/Indirect
+                found_types = []
+                found_reasons = []
                 if R[i][j]:
                     connected = True
                     if j in adj[i]:
-                        symbols = list(adj[i][j])[:3]
-                        reason = f"Uses {', '.join(symbols)}..."
+                        conn_type = "Direct"
+                        raw_details = list(adj[i][j])
+                        unique_symbols = sorted(list(set(d.split(' (')[0] for d in raw_details)))
+                        symbols_str = ', '.join(unique_symbols[:3])
+                        remaining = len(unique_symbols) - 3
+                        if remaining > 0: symbols_str += f"... (+{remaining} more)"
+                        reason_str = f"Uses: {symbols_str}"
                     else:
-                        reason = "Indirect call chain"
-                elif R[j][i]:
+                        conn_type = "Indirect"
+                        reason_str = "Indirect chain"
+                    found_types.append(conn_type)
+                    found_reasons.append(reason_str)
+                if R[j][i]:
                     connected = True
                     if i in adj[j]:
-                        symbols = list(adj[j][i])[:3]
-                        reason = f"Uses {', '.join(symbols)}..."
+                        conn_type = "Direct (Reverse)" if "Direct" in found_types else "Direct"
+                        raw_details = list(adj[j][i])
+                        unique_symbols = sorted(list(set(d.split(' (')[0] for d in raw_details)))
+                        symbols_str = ', '.join(unique_symbols[:3])
+                        remaining = len(unique_symbols) - 3
+                        if remaining > 0: symbols_str += f"... (+{remaining} more)"
+                        reason_str = f"Is Used By: {symbols_str}"
                     else:
-                        reason = "Indirect call chain"
-                
-                # Shared Dependency
-                if not connected:
-                    for t in range(m):
-                        if t == i or t == j: continue
-                        if R[i][t] and R[j][t]:
-                            connected = True
-                            reason = f"Both use {os.path.basename(nodes[t])}"
-                            break
-                            
+                        conn_type = "Indirect"
+                        reason_str = "Indirect chain (Reverse)"
+                    if "Indirect" not in found_types or conn_type == "Direct": 
+                         if conn_type not in found_types: found_types.append(conn_type)
+                    found_reasons.append(reason_str)
+                for t in range(m):
+                    if t == i or t == j: continue
+                    if R[i][t] and R[j][t]:
+                        connected = True
+                        if "Shared Dependency" not in found_types:
+                             found_types.append("Shared Dependency")
+                             found_reasons.append(f"Both use: {os.path.basename(nodes[t])}")
+                        break
                 if connected:
                     connections_count += 1
                     groups_adj[i].add(j)
                     groups_adj[j].add(i)
+                    
+                    final_type = " + ".join(sorted(list(set(found_types))))
+                    final_reason = "; ".join(found_reasons)
+                        
                     connections_list.append({
                         'node_a': os.path.basename(nodes[i]),
                         'node_b': os.path.basename(nodes[j]),
-                        'reason': reason
+                        'type': final_type,
+                        'reason': final_reason
                     })
-
-        # Find Groups (DFS)
-        visited = set()
-        groups = []
-        node_names = [os.path.basename(n) for n in nodes]
-        
-        for i in range(m):
-            if i not in visited:
-                component = []
-                stack = [i]
-                visited.add(i)
-                while stack:
-                    curr = stack.pop()
-                    component.append(node_names[curr])
-                    for neighbor in groups_adj[curr]:
-                        if neighbor not in visited:
-                            visited.add(neighbor)
-                            stack.append(neighbor)
-                groups.append(component)
-        
-        # Isolated Nodes
-        connected_indices = set(groups_adj.keys())
-        isolated = [node_names[i] for i in range(m) if i not in connected_indices]
-        
+        groups, isolated = find_connected_groups(nodes, groups_adj)
         return {
             'valid': True,
             'n_nodes': m,
-            'nodes': node_names,
+            'nodes': [os.path.basename(n) for n in nodes],
             'connections_count': connections_count,
             'n_groups': len(groups),
             'groups': groups,
@@ -283,30 +269,20 @@ class FCPPAnalyzer(BaseAnalyzer):
             target = alias.name
             as_name = alias.asname or alias.name
             found_idx = None
-            
-            # Module-based resolution
             if module:
                 parts = module.split('.')
-                # Last part is usually the file/module name
                 found_idx = match_node(parts[-1])
                 if found_idx is None and len(parts) > 0:
                     found_idx = match_node(parts[0])
-            
-            # Direct name resolution
             if found_idx is None:
                 found_idx = match_node(target)
                 if found_idx is None:
-                    # Try splitting (import sibling.func)
                     found_idx = match_node(target.split('.')[0])
-            
-            # Definition lookup (The "Magic" Step)
             if found_idx is None:
                 if target in definitions:
                     candidates = definitions[target]
                     if candidates:
                         found_idx = candidates[0]
-            
             if found_idx is not None and node_to_idx.get(current_file) != found_idx:
                 resolved[as_name] = found_idx
-                
         return resolved

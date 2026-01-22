@@ -1,6 +1,4 @@
 from typing import Dict, List, Set, Any
-
-
 class CCPPCalculator:
     """
     Calculator for Package Functional Purity (CCPP) metrics.

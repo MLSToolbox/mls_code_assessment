@@ -1,7 +1,7 @@
 {
     "rules": [
         {
-            "id": "fcpp_low_cohesion_isolated",
+            "id": "1",
             "conditions": {
                 "isolated_nodes_count": ">0"
             },
@@ -10,16 +10,16 @@
             "severity": "medium"
         },
         {
-            "id": "fcpp_low_cohesion_split",
+            "id": "2",
             "conditions": {
                 "n_groups": ">1"
             },
             "diagnosis_template": "The package '{package_name}' contains {n_groups} disconnected functional groups (FCPP: {fcpp:.2f}).",
-            "recommendation_template": "As there are {n_groups} groups of functionally connected modules {{{groups_str}}}, if these groups are not structurally connected (check SCPP), the package should be split into {n_groups} smaller subpackages.",
+            "recommendation_template": "Additionally, as there are {n_groups} groups of functional connected modules/subpackages {{{groups_str}}}, if these groups are not structural connected, to improve package functional cohesion, the package should be split into {n_groups} smaller subpackages.",
             "severity": "medium"
         },
         {
-            "id": "fcpp_high_cohesion",
+            "id": "3",
             "conditions": {
                 "fcpp": ">=0.8"
             },
@@ -28,7 +28,7 @@
             "severity": "info"
         },
         {
-            "id": "fcpp_medium_cohesion",
+            "id": "4",
             "conditions": {
                 "fcpp": ">=0.4"
             },
@@ -37,7 +37,7 @@
             "severity": "low"
         },
         {
-            "id": "fcpp_low_generic",
+            "id": "5",
             "conditions": {
                 "fcpp": "<0.4",
                 "isolated_nodes_count": "==0",

@@ -53,7 +53,19 @@ Constructs: G=(V, E)       ▲
     *   **Componentes Conectados (Grupos)**: Utiliza DFS (Depth First Search) para identificar subgrafos disjuntos.
     *   **Nodos Aislados**: Identifica archivos que no comparten recursos con ningún otro.
 
-### 2.2 Fórmulas Matemáticas
+### 2.2 Relación con LCOM y Recomendaciones
+
+La lógica de detección de fracturas implementa el concepto de **LCOM** a nivel de paquete. El análisis calcula el *number of groups of connected modules/subpackages* ($N_{groups}$).
+
+*   **Condición de Conexión**: Los módulos se consideran conectados si comparten *datasets*, *models* o *configurations*.
+*   **Resultados Posibles**: $N_{groups}$ puede ser 1 (cohesivo), >1 (fracturado) o 0 (aislado).
+
+**Recomendación Específica ($N_{groups} > 1$):**
+En el caso de detectar múltiples grupos desconectados, el sistema emite automáticamente la siguiente recomendación:
+
+> "Additionally, as there are X groups of structural connected modules/subpackages {{m11,...,m1n}, …{mx1,...,mxs}}, if these groups are not functional connected, to improve package structural cohesion, the package should be split into X smaller subpackages."
+
+### 2.3 Fórmulas Matemáticas
 
 La métrica se basa formalmente en la siguiente definición teórica:
 
@@ -84,7 +96,7 @@ Esto produce el mismo resultado matemático que la definición teórica pero de 
 *   **SCPP = 0.0**: Cada archivo es una isla. No hay recursos compartidos.
 *   **SCPP intermedio**: El paquete está fragmentado en varios "clusters" de funcionalidad.
 
-### 2.3 SCPPEvaluator
+### 2.4 SCPPEvaluator
 **Responsabilidad**: Diagnóstico Cualitativo.
 
 Evalúa no solo el score numérico, sino la topología detectada:

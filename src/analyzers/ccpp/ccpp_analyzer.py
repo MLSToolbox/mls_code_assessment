@@ -2,13 +2,10 @@ import os
 import json
 from typing import Dict, List, Set, Any
 from collections import defaultdict
-
 from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.ccpp.ccpp_calculator import CCPPCalculator
 from analyzers.ccpp.ccpp_evaluator import CCPPEvaluator
-
-
 class CCPPAnalyzer(BaseAnalyzer):
     """
     Conceptual Cohesion of Pipeline Packages (CCPP) Analyzer.
@@ -29,11 +26,9 @@ class CCPPAnalyzer(BaseAnalyzer):
     - Low: Distinct pipeline stages mixed together (e.g. Training + Deployment)
     - Very Low: Multiple phases/stages mixed with high ratio of non-ML content
     """
-
     @property
     def analyzer_id(self) -> str:
         return "ccpp"
-    
     def __init__(self, session_id: str, local_path: str, context=None):
         super().__init__(session_id, local_path, context)
         pipeline_stages_json_path = os.path.join(
@@ -41,7 +36,6 @@ class CCPPAnalyzer(BaseAnalyzer):
             'pipeline',
             'pipeline_stages.json'
         )
-        
         if os.path.exists(pipeline_stages_json_path):
             with open(pipeline_stages_json_path, 'r') as f:
                 self.config = json.load(f)
@@ -90,7 +84,6 @@ class CCPPAnalyzer(BaseAnalyzer):
             },
             
         )
-
     def _analyze_package(self, pkg_path: str, modules: List[str]) -> Dict[str, Any]:
         """
         Calculates CCPP for a single package by reusing CCPM metrics.

@@ -6,7 +6,7 @@
                 "n_groups": ">1"
             },
             "diagnosis_template": "the package '{package_name}' is fractured into {n_groups} completely disconnected groups (SCPP: {scpp:.2f}).",
-            "recommendation_template": "This package acts as {n_groups} separate packages. Unless these are loosely coupled utilities, you MUST split this package into {n_groups} distinct packages to respect the Single Responsibility Principle.",
+            "recommendation_template": "Additionally, as there are {n_groups} groups of structural connected modules/subpackages {{{groups_str}}}, if these groups are not functional connected, to improve package structural cohesion, the package should be split into {n_groups} smaller subpackages.",
             "severity": "high"
         },
         {

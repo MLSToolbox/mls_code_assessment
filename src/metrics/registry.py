@@ -292,7 +292,6 @@ METRICS_REGISTRY = {
         references=["LDSC - Local Data Structure Cohesion (Internal Definition)"],
         category="cohesion"
     ),
-
     "fcpm": MetricMetadata(
         metric_id="fcpm",
         name="Functional Cohesion of Pipeline Modules",
@@ -445,63 +444,190 @@ METRICS_REGISTRY = {
     ),
     "ccpp": MetricMetadata(
         metric_id="ccpp",
-        name="Cohesion of Coupled Packages",
+        name="Conceptual Cohesion of Pipeline Packages",
         description=(
-            "Measures cohesion between packages that share pipeline resources. "
-            "High values indicate packages are tightly coupled and should be refactored."
+            "Measures the conceptual cohesion of a package by evaluating whether its contained modules "
+            "belong to a single ML pipeline stage or phase. It aggregates file-level CCPM metrics "
+            "to determine if the package has a focused responsibility (High Cohesion) or mixes "
+            "unrelated pipeline tasks (Low Cohesion). Penalizes the presence of non-ML code."
         ),
-        formula="CCPP(P) = sum(C_ij) / (m * (m - 1)), where m = number of direct nodes (packages), and C_ij = 1 if packages share resources.",
+        formula=(
+            "=== MATHEMATICAL FORMULA ===\n"
+            "CCPP = ContentRatio × CohesionFactor\n\n"
+            "Where:\n"
+            "1. **Content Ratio** (Purity of ML content):\n"
+            "   • Ratio = n_ML / n_Total\n"
+            "   • n_ML = Number of modules identified as ML pipeline code\n"
+            "   • n_Total = Total number of Python modules in the package\n\n"
+            "2. **Cohesion Factor** (Architectural Consistency):\n"
+            "   • Penalizes mixing different pipeline stages.\n"
+            "   • Base Penalty (P_base) = (UniqueStages - 1) / (MaxStages - 1)\n"
+            "   • MaxStages is dynamically loaded from pipeline_stages.json (default 5)\n\n"
+            "=== AFFINITY BONUS LOGIC ===\n"
+            "The Cohesion Factor applies a 'Phase Affinity' bonus if mixed stages belong to the same logical phase:\n\n"
+            "• **Scenario A (Different Phases)**: Mixed stages are unrelated (e.g., Data Prep + Model Training)\n"
+            "  CF = 1.0 - P_base\n"
+            "  (Full penalty applied)\n\n"
+            "• **Scenario B (Same Phase)**: Mixed stages are related (e.g., Data Collection + Data Cleaning)\n"
+            "  CF = 1.0 - (P_base × 0.5)\n"
+            "  (Penalty reduced by 50% due to logical affinity)\n\n"
+            "=== CALCULATION PROCESS (ccpp_analyzer.py) ===\n\n"
+            "Step 1: Discovery & Content Analysis\n"
+            "  • _discover_packages(): Finds all packages (directories with __init__.py).\n"
+            "  • For each package, aggregates CCPM results of contained modules.\n\n"
+            "Step 2: Aggregation (CCPPCalculator)\n"
+            "  • Counts total modules vs ML modules.\n"
+            "  • Identifies the set of unique Stages and Phases present in the package.\n\n"
+            "Step 3: Scoring\n"
+            "  • Calculates CCPP Score using the formula above.\n"
+            "  • Determines 'Purity Level' based on the score.\n\n"
+            "=== EVALUATION (ccpp_evaluator.py) ===\n"
+            "Matches metrics against ccpp_rules.json to generate diagnosis:\n"
+            "• Detects 'God Packages' (mix of everything).\n"
+            "• Suggests splitting packages if multiple distinct phases are found.\n"
+            "• Identifies packages with low ML content ratio."
+        ),
         ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
         interpretation={
-            "very_high (0.8-1.0)": "Excellent - Maximum cohesion, packages are tightly coupled",
-            "high (0.6-0.79)": "Good - Strong cohesion between packages",
-            "medium (0.4-0.59)": "Moderate - Some cohesion relationships exist",
-            "low (0.2-0.39)": "Poor - Weak cohesion, packages operate too independently",
-            "very_low (0.0-0.19)": "Critical - Minimal cohesion, packages likely violate SRP, needs refactoring"
+            "very_high (0.8-1.0)": "Excellent - Focused package, single pipeline stage/phase, high ML usage",
+            "high (0.6-0.79)": "Good - Mostly focused, may mix closely related stages (e.g. data engineering)",
+            "medium (0.4-0.59)": "Moderate - Signs of architectural erosion, mixing distinct phases",
+            "low (0.2-0.39)": "Poor - Confused responsibilities, likely a 'misc' or 'utils' dump",
+            "very_low (0.0-0.19)": "Critical - Chaos, mixes multiple unrelated stages and non-ML code"
         },
-        references=["CCPP - Cohesion of Coupled Packages (Internal Definition)", "Internal Definition - SCPP"],
+        references=[
+            "Internal Definition: Conceptual Cohesion of Pipeline Packages"
+        ],
         category="cohesion"
     ),
-
     "scpp": MetricMetadata(
         metric_id="scpp",
         name="Structural Coupling Package Pipeline",
         description=(
-            "Measures structural coupling of a package based on shared pipeline resources "
-            "(datasets, models, configurations) between its modules and subpackages."
+            "Measures how much modules and/or subpackages within a package correspond "
+            "from the point of view of sharing pipeline data and models. "
+            "Higher values indicate that components within the package are strongly related "
+            "through direct or indirect sharing of models, configurations, or datasets."
         ),
         formula=(
-            "SCPP(P) = (2 * sum(Q_ij)) / (m * (m - 1)), where m = number of direct nodes "
-            "(files/subpackages), and Q_ij = 1 if a pair shares pipeline resources."
+            "=== MATHEMATICAL FORMULA ===\n"
+            "SCPP(P) = (2 × Σ(i<j) Q_ij) / (m × (m - 1))\n\n"
+            "Where:\n"
+            "• m = number of modules and subpackages in the package\n"
+            "• Q_ij = 1 if components i and j share, directly or indirectly, at least one resource\n"
+            "• Q_ij = 0 otherwise\n"
+            "• Result range: [0.0, 1.0] (0 = minimum cohesion, 1 = maximum cohesion)\n\n"
+            "=== WHAT COUNTS AS SHARED (Q_ij = 1) ===\n"
+            "Modules share if they access at least one common:\n"
+            "1. Model: e.g., 'model.pkl' (file) or self.model (attribute)\n"
+            "2. Common Configuration: e.g., global constants, 'config.yaml', self.config\n"
+            "3. Dataset: e.g., 'data.csv' (file) or self.dataset (attribute)\n\n"
+            "Note: Sharing is TRANSITIVE (indirect sharing counts). If A shares with B, and B with C, "
+            "then A is considered connected to C (same connected component).\n\n"
+            "=== CALCULATION PROCESS (scpp_analyzer.py) ===\n\n"
+            "Step 1: Identify Package Nodes\n"
+            "  • Scans directory for all .py files (modules) and subdirectories (__init__.py)\n"
+            "  • Total count = m\n\n"
+            "Step 2: Resource Extraction per Node\n"
+            "  • _extract_file_resources(file_path):\n"
+            "    - Scans AST for string literals (file paths)\n"
+            "    - Scans AST for global variables (constants)\n"
+            "    - Scans AST for class attributes (self.*) representing persistent state\n"
+            "  • For subpackages, recursively aggregates resources of all contained files\n\n"
+            "Step 3: Build Connectivity Graph\n"
+            "  • Nodes: Modules/Subpackages\n"
+            "  • Edges: Created if Intersection(Resources_i, Resources_j) is not empty\n\n"
+            "Step 4: Identify Connected Components (Groups)\n"
+            "  • Uses DFS (Depth-First Search) on the graph\n"
+            "  • Finds disjoint sets of connected nodes\n"
+            "  • All nodes in the same group implicitly have Q_ij = 1 with each other\n\n"
+            "Step 5: Calculate SCPP Score\n"
+            "  • IndirectSharedPairs = Sum( size(Group_k) * (size(Group_k) - 1) / 2 ) for all groups\n"
+            "  • TotalPairs = m * (m - 1) / 2\n"
+            "  • SCPP = IndirectSharedPairs / TotalPairs\n\n"
+            "=== EVALUATION (scpp_evaluator.py) ===\n"
+            "Matches metrics against scpp_rules.json considering:\n"
+            "• SCPP Score\n"
+            "• Number of disconnected groups (n_groups)\n"
+            "• Count of isolated nodes (isolated_nodes_count)\n"
+            "• Generates warnings for fractured packages or isolated scripts"
         ),
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.6", "acceptable": "0.4-0.6", "warning": "<0.4"},
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
         interpretation={
-            "0.8-1.0": "Very High",
-            "0.6-0.8": "High",
-            "0.4-0.6": "Medium",
-            "0.2-0.4": "Low ",
-            "0.0-0.2": "Very Low "
+            "very_high (0.8-1.0)": "Excellent - All modules contribute to a single cohesive pipeline unit",
+            "high (0.6-0.79)": "Good - Most modules are connected, high structural cohesion",
+            "medium (0.4-0.59)": "Moderate - Package fragmentation detected, some modules form separate clusters",
+            "low (0.2-0.39)": "Poor - High fragmentation, package likely contains unrelated responsibilities",
+            "very_low (0.0-0.19)": "Critical - Modules are mostly isolated scripts, no structural cohesion"
         },
-        references=["Internal Definition - SCPP"],
+        references=["Internal Definition: Structural Cohesion of Pipeline Packages"],
         category="cohesion"
     ),
     "fcpp": MetricMetadata(
         metric_id="fcpp",
         name="Functional Cohesion of Pipeline Packages",
         description=(
-            "Measures functional cohesion based on call graph invocations (direct/indirect) "
-            "between package modules."
+            "Measures how much the modules and/or subpackages of a package are related "
+            "from the point of view of the invocations they perform (function calls, class instantiations, "
+            "usage of imported variables). A high FCPP indicates that the package components collaborate "
+            "closely to perform a common task. Complementary to SCPP (structural cohesion), "
+            "focusing on algorithmic/functional relationships rather than data sharing."
         ),
-        formula="FCPP(P) = (2 * sum(F_ij)) / (m * (m - 1))",
-        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.6", "acceptable": "0.4-0.6", "warning": "<0.4"},
+        formula=(
+            "=== MATHEMATICAL FORMULA ===\n"
+            "FCPP(P) = (2 × Σ(i<j) F_ij) / (m × (m - 1))\n\n"
+            "Where:\n"
+            "• m = number of modules and subpackages in the package\n"
+            "• F_ij = 1 if components i and j have a functional relationship (direct, indirect, or shared dependency)\n"
+            "• F_ij = 0 otherwise\n"
+            "• Result range: [0.0, 1.0] (0 = minimum cohesion, 1 = maximum cohesion)\n\n"
+            "=== CONDITIONS FOR F_ij = 1 (Functional Connection) ===\n\n"
+            "Two components i and j are functionally connected if ANY of:\n\n"
+            "1. **Direct Invocation**:\n"
+            "   • m_i → m_j OR m_j → m_i\n"
+            "   • One module imports and uses a symbol (function, class, variable) defined in the other.\n\n"
+            "2. **Indirect Invocation**:\n"
+            "   • m_i → ... → m_j OR m_j → ... → m_i\n"
+            "   • There is a chain of invocations between them within the package.\n\n"
+            "3. **Shared Dependency**:\n"
+            "   • m_i → m_t AND m_j → m_t\n"
+            "   • Both modules rely on a third internal component m_t.\n"
+            "   • Note: This ensures that clients of a common utility are considered related.\n\n"
+            "=== CALCULATION PROCESS (fcpp_analyzer.py) ===\n\n"
+            "Step 1: Identify Package Nodes\n"
+            "  • get_package_nodes(): Scans directory for .py files, excluding infrastructure (__init__, __main__, setup, conftest).\n"
+            "  • Total count = m\n\n"
+            "Step 2: Build Symbol Table & Adjacency\n"
+            "  • Parses AST to map definitions (functions/classes) to their owner files.\n"
+            "  • Scans AST for Import/Call nodes to build a directed adjacency matrix representing 'Who uses Whom'.\n\n"
+            "Step 3: Compute Connectivity (Transitive Closure)\n"
+            "  • Uses Floyd-Warshall algorithm to determine the reachability matrix R.\n"
+            "  • R[i][j] = 1 implies a path exists from i to j.\n\n"
+            "Step 4: Determine Connections (F_ij)\n"
+            "  • For every pair (i, j):\n"
+            "    - Direct/Indirect: R[i][j] OR R[j][i]\n"
+            "    - Shared Dependency: EXISTS t such that R[i][t] AND R[j][t]\n"
+            "    - If any condition is met, F_ij = 1\n\n"
+            "Step 5: Calculate Score & LCOM Analysis\n"
+            "  • Sums all unique connected pairs.\n"
+            "  • FCPP = ConnectedPairs / TotalPossiblePairs\n"
+            "  • Uses Graph Traversal (DFS) via 'find_connected_groups' to identify isolated nodes and fractured groups for recommendations.\n\n"
+            "=== EVALUATION (fcpp_evaluator.py) ===\n"
+            "Matches metrics against fcpp_rules.json considering:\n"
+            "• FCPP Score\n"
+            "• Number of Groups (n_groups)\n"
+            "• Isolated Nodes\n"
+            "• Generates detailed reasons for connections (e.g., 'Direct + Shared Dependency')."
+        ),
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
         interpretation={
-            "0.8-1.0": "Very High",
-            "0.6-0.8": "High",
-            "0.4-0.6": "Medium",
-            "0.2-0.4": "Low",
-            "0.0-0.2": "Very Low"
+            "very_high (0.8-1.0)": "Excellent - All modules are functionally integrated, working together on a common workflow",
+            "high (0.6-0.79)": "Good - Strong functional collaboration, few isolated components",
+            "medium (0.4-0.59)": "Moderate - Package shows signs of fragmentation, possible distinct functional groups",
+            "low (0.2-0.39)": "Poor - Weak collaboration, package likely acts as a container for unrelated utilities",
+            "very_low (0.0-0.19)": "Critical - Modules are functionally isolated, merely grouped by directory"
         },
-        references=["Internal Definition - FCPP"],
+        references=["Internal Definition: Functional Cohesion of Pipeline Packages"],
         category="cohesion"
     )
 }
