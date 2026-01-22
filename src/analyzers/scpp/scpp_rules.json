@@ -1,0 +1,62 @@
+{
+    "rules": [
+        {
+            "id": 1,
+            "conditions": {
+                "n_groups": ">1"
+            },
+            "diagnosis_template": "the package '{package_name}' is fractured into {n_groups} completely disconnected groups (SCPP: {scpp:.2f}).",
+            "recommendation_template": "This package acts as {n_groups} separate packages. Unless these are loosely coupled utilities, you MUST split this package into {n_groups} distinct packages to respect the Single Responsibility Principle.",
+            "severity": "high"
+        },
+        {
+            "id": 2,
+            "conditions": {
+                "scpp": "<0.2",
+                "n_groups": "==1"
+            },
+            "diagnosis_template": "The package '{package_name}' has nearly zero structural cohesion (SCPP: {scpp:.2f}). Files behave like a random collection of scripts.",
+            "recommendation_template": "This implies no shared state, data, or configuration. Consider organizing these files by feature or functionality instead of grouping them arbitrarily.",
+            "severity": "high"
+        },
+        {
+            "id": 3,
+            "conditions": {
+                "isolated_nodes_count": ">0",
+                "scpp": "<0.7"
+            },
+            "diagnosis_template": "The package '{package_name}' contains isolated modules {{{isolated_nodes_str}}} that do not share state or data (files, globals, class attributes) with the rest of the package.",
+            "recommendation_template": "Verify if {{{isolated_nodes_str}}} belong here. If they are helpers, they might belong in a 'utils' package. If they are core logic, they are missing necessary data connections.",
+            "severity": "medium"
+        },
+        {
+            "id": 4,
+            "conditions": {
+                "isolated_nodes_count": ">0",
+                "scpp": ">=0.7"
+            },
+            "diagnosis_template": "The package '{package_name}' is mostly cohesive, but contains isolated modules {{{isolated_nodes_str}}}.",
+            "recommendation_template": "Check if {{{isolated_nodes_str}}} are standalone scripts or utilities. If so, this is acceptable. Otherwise, check for missing connections.",
+            "severity": "low"
+        },
+        {
+            "id": 5,
+            "conditions": {
+                "scpp": ">=0.8",
+                "isolated_nodes_count": "==0"
+            },
+            "diagnosis_template": "The package '{package_name}' has excellent structural cohesion (SCPP: {scpp:.2f}). All modules share state or data resources.",
+            "recommendation_template": "Excellent organization. The package tightly encapsulates its data and logic.",
+            "severity": "info"
+        },
+        {
+            "id": 6,
+            "conditions": {
+                "scpp": ">=0.4"
+            },
+            "diagnosis_template": "The package '{package_name}' has medium structural cohesion (SCPP: {scpp:.2f}). Modules share some resources.",
+            "recommendation_template": "Acceptable for a library package. For a pipeline stage, consider tightening the data dependencies or extracting shared logic.",
+            "severity": "low"
+        }
+    ]
+}

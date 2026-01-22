@@ -9,52 +9,58 @@ class CCPPCalculator:
     1. ML content ratio (n_ml / n_total)
     2. Stage diversity penalty (cohesion factor CF)
     """
-    
-    def __init__(self, etapas_max: int = 6):
+    def __init__(self, etapas_max: int = 5):
         """
         Initialize CCPP calculator.
         
         Args:
-            etapas_max: Maximum number of pipeline stages (updated to 6 stages)
+            etapas_max: Maximum number of pipeline stages (dynamically sourced from config)
         """
         self.etapas_max = etapas_max
-    
     def calculate_ccpp(
         self, 
         n_total: int, 
         n_ml: int, 
-        unique_stages: int
+        unique_stages: int,
+        unique_phases: int = 0
     ) -> float:
         """
         Calculate CCPP score for a package.
-        
         Formula: CCPP = (n_ml / n_total) × CF
-        where CF = 1 - ((n_stages - 1) / (ETAPAS_MAX - 1))
+        The Cohesion Factor (CF) is calculated based on stage diversity:
+        1. Single Stage: CF = 1.0 (Ideal)
+        2. Multiple Stages:
+           - Same Phase (Affinity Bonus): Penalty is halved. Mixing related stages (e.g., Collection & Cleaning) is less severe.
+             CF = 1 - ((n_stages - 1) / (ETAPAS_MAX - 1)) * 0.5
+           - Different Phases: Full penalty. Mixing unrelated stages (e.g., Cleaning & Training) reduces cohesion significantly.
+             CF = 1 - ((n_stages - 1) / (ETAPAS_MAX - 1))
         
         Args:
-            n_total: Total number of modules in package
-            n_ml: Number of ML-related modules
-            unique_stages: Number of unique pipeline stages detected
+            n_total: Total modules in package
+            n_ml: Modules identified as part of the ML pipeline
+            unique_stages: Count of distinct pipeline stages found
+            unique_phases: Count of distinct pipeline phases (Data Engineering vs Model Development)
             
         Returns:
-            CCPP score between 0 and 1
+            CCPP score (0-1)
         """
         if n_total == 0:
             return 0.0
         cf = 1.0
         if self.etapas_max > 1 and unique_stages > 1:
-            cf = 1 - ((unique_stages - 1) / (self.etapas_max - 1))
+            base_penalty = (unique_stages - 1) / (self.etapas_max - 1)
+            # Affinity Bonus: If all stages belong to the same phase, halve the penalty
+            if unique_phases == 1:
+                cf = 1 - (base_penalty * 0.5)
+            else:
+                cf = 1 - base_penalty 
         ccpp_score = (n_ml / n_total) * cf
-        
         return round(ccpp_score, 4)
-    
     def get_purity_level(self, ccpp_score: float) -> str:
         """
         Determines qualitative purity level from CCPP score.
-        
         Args:
-            ccpp_score: CCPP score (0-1)
-            
+            ccpp_score: CCPP score (0-1)  
         Returns:
             Purity level: "High", "Moderate", "Low", or "Very Low"
         """
@@ -86,13 +92,13 @@ class CCPPCalculator:
     
     def aggregate_package_metrics(
         self, 
-        modules_fpc_results: List[Dict[str, Any]]
+        modules_ccpm_results: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Aggregate FPC results from multiple modules into package-level metrics.
+        Aggregate CCPM results from multiple modules into package-level metrics.
         
         Args:
-            modules_fpc_results: List of FPC results for each module
+            modules_ccpm_results: List of CCPM results for each module
             
         Returns:
             Dictionary with aggregated package metrics:
@@ -101,25 +107,25 @@ class CCPPCalculator:
             - all_stages: Set of unique stages
             - modules_info: Per-module details
         """
-        n_total = len(modules_fpc_results)
+        n_total = len(modules_ccpm_results)
         n_ml = 0
         all_stages: Set[str] = set()
         modules_info: List[Dict[str, Any]] = []
         
-        for fpc_result in modules_fpc_results:
-            if fpc_result and fpc_result.get('stages_detected'):
+        for ccpm_result in modules_ccpm_results:
+            if ccpm_result and ccpm_result.get('stages_detected'):
                 n_ml += 1
-                all_stages.update(fpc_result['stages_detected'])
+                all_stages.update(ccpm_result['stages_detected'])
                 modules_info.append({
-                    'path': fpc_result.get('file_path', 'unknown'),
-                    'stages': list(fpc_result.get('stages_detected', [])),
-                    'cohesion': fpc_result.get('cohesion_level')
+                    'path': ccpm_result.get('file_path', 'unknown'),
+                    'stages': list(ccpm_result.get('stages_detected', [])),
+                    'cohesion': ccpm_result.get('cohesion_level')
                 })
             else:
                 modules_info.append({
-                    'path': fpc_result.get('file_path', 'unknown') if fpc_result else 'unknown',
+                    'path': ccpm_result.get('file_path', 'unknown') if ccpm_result else 'unknown',
                     'stages': [],
-                    'cohesion': None
+                    'cohesion': ccpm_result.get('cohesion_level')
                 })
         
         return {
@@ -128,7 +134,5 @@ class CCPPCalculator:
             'all_stages': all_stages,
             'modules_info': modules_info
         }
-    
     def get_etapas_max(self) -> int:
-        """Get maximum number of stages configured."""
         return self.etapas_max

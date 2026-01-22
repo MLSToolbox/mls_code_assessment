@@ -37,8 +37,6 @@ class CCPPEvaluator(BaseEvaluator):
         
         for rule in self.rules:
             conditions = rule['conditions']
-            
-            # Check number_of_phases condition
             if 'number_of_phases' in conditions:
                 phase_cond = conditions['number_of_phases']
                 if isinstance(phase_cond, str) and phase_cond.startswith(">"):
@@ -47,8 +45,6 @@ class CCPPEvaluator(BaseEvaluator):
                         continue
                 elif phase_cond != number_of_phases:
                     continue
-            
-            # Check number_of_stages condition
             if 'number_of_stages' in conditions:
                 stage_cond = conditions['number_of_stages']
                 if stage_cond == ">1":
@@ -59,8 +55,6 @@ class CCPPEvaluator(BaseEvaluator):
                         continue
                 else:
                     continue
-            
-            # Check ml_ratio condition
             if 'ml_ratio' in conditions:
                 ml_ratio_cond = conditions['ml_ratio']
                 if ml_ratio_cond == 1:
@@ -74,8 +68,6 @@ class CCPPEvaluator(BaseEvaluator):
                         continue
                 else:
                     continue
-            
-            # Check average_elems_per_stage condition
             if 'average_elems_per_stage' in conditions:
                 avg_cond = conditions['average_elems_per_stage']
                 if avg_cond == ">1":
@@ -89,11 +81,7 @@ class CCPPEvaluator(BaseEvaluator):
                         continue
                 else:
                     continue
-            
-            # All conditions matched
             return rule
-        
-        # No rule matched
         return None
     
     def evaluate_package(
@@ -112,19 +100,12 @@ class CCPPEvaluator(BaseEvaluator):
             Evaluation result dict with diagnosis, recommendation, and severity,
             or None if no issues found (High purity with good structure)
         """
-        # Calculate number of phases (unique phases across all detected stages)
         phases_detected = set(package_metrics.get('phases_detected', []))
         number_of_phases = len(phases_detected)
-        
-        # Get number of stages
         number_of_stages = package_metrics.get('unique_stages_found', 0)
-        
-        # Calculate ml_ratio
         ml_modules = package_metrics.get('ml_modules', 0)
         total_modules = package_metrics.get('total_modules', 1)
         ml_ratio = ml_modules / total_modules if total_modules > 0 else 0
-        
-        # Calculate average elements per stage
         average_elems_per_stage = 0
         if number_of_stages > 0:
             modules = package_metrics.get('modules', [])
@@ -136,8 +117,6 @@ class CCPPEvaluator(BaseEvaluator):
             if stage_counts:
                 total_elems = sum(stage_counts.values())
                 average_elems_per_stage = total_elems / len(stage_counts)
-        
-        # Prepare metrics for rule matching
         metrics_for_matching = {
             'number_of_phases': number_of_phases,
             'number_of_stages': number_of_stages,
@@ -147,28 +126,17 @@ class CCPPEvaluator(BaseEvaluator):
             'ml_modules': ml_modules,
             'total_modules': total_modules
         }
-        
-        # Find matching rule
         matched_rule = self._match_rule(metrics_for_matching)
-        
         if not matched_rule:
             return None
-        
-        # Skip "info" severity messages (high purity, no issues)
         if matched_rule.get('severity') == 'info':
             return None
-        
-        # Extract package name from path
         package_name = os.path.basename(package_path) or package_path
-        
-        # Prepare template variables
         template_vars = {
             'package_name': package_name,
-            'ccpp_score': package_metrics.get('ccpp_score', 0.0),
-            'pfp_score': package_metrics.get('ccpp_score', 0.0)
+            'ccpp_score': package_metrics.get('ccpp_score', 0.0)
+           
         }
-        
-        # Format diagnosis and recommendation
         diagnosis = matched_rule['diagnosis'].format(**template_vars)
         recommendation = matched_rule['recommendation'].format(**template_vars)
         

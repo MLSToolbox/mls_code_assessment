@@ -237,11 +237,11 @@ class FCPMAnalyzer(BaseAnalyzer):
             call_graph[method_name] = list(calls)
         
         return call_graph
-
+    
     def _extract_methods(self, tree: ast.Module) -> Dict[str, ast.FunctionDef]:
         """Extract all methods from the AST, with qualified names."""
         return extract_methods(tree)
-
+    
     def _get_method_calls(
         self, 
         method_node: ast.FunctionDef,

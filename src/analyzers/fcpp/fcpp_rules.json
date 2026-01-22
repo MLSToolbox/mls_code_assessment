@@ -1,0 +1,51 @@
+{
+    "rules": [
+        {
+            "id": "fcpp_low_cohesion_isolated",
+            "conditions": {
+                "isolated_nodes_count": ">0"
+            },
+            "diagnosis_template": "The package '{package_name}' has low functional cohesion (FCPP: {fcpp:.2f}). The modules/subpackages {{{isolated_nodes_str}}} do not invoke (directly or indirectly) functions of any other module in this package.",
+            "recommendation_template": "If these modules do not share data resources (check SCPP), consider moving them to a package more functionally related to them.",
+            "severity": "medium"
+        },
+        {
+            "id": "fcpp_low_cohesion_split",
+            "conditions": {
+                "n_groups": ">1"
+            },
+            "diagnosis_template": "The package '{package_name}' contains {n_groups} disconnected functional groups (FCPP: {fcpp:.2f}).",
+            "recommendation_template": "As there are {n_groups} groups of functionally connected modules {{{groups_str}}}, if these groups are not structurally connected (check SCPP), the package should be split into {n_groups} smaller subpackages.",
+            "severity": "medium"
+        },
+        {
+            "id": "fcpp_high_cohesion",
+            "conditions": {
+                "fcpp": ">=0.8"
+            },
+            "diagnosis_template": "The package '{package_name}' has high functional cohesion (FCPP: {fcpp:.2f}). Almost all modules interact with each other.",
+            "recommendation_template": "Excellent functional organization. The package represents a unified functional block.",
+            "severity": "info"
+        },
+        {
+            "id": "fcpp_medium_cohesion",
+            "conditions": {
+                "fcpp": ">=0.4"
+            },
+            "diagnosis_template": "The package '{package_name}' has medium functional cohesion (FCPP: {fcpp:.2f}). There is some interaction between modules.",
+            "recommendation_template": "Functional cohesion is acceptable, but could be improved by ensuring better integration or splitting distinct responsibilities.",
+            "severity": "low"
+        },
+        {
+            "id": "fcpp_low_generic",
+            "conditions": {
+                "fcpp": "<0.4",
+                "isolated_nodes_count": "==0",
+                "n_groups": "==1"
+            },
+            "diagnosis_template": "The package '{package_name}' has low functional cohesion (FCPP: {fcpp:.2f}) despite having no completely isolated nodes.",
+            "recommendation_template": "The interaction density is low. Modules are loosely coupled.",
+            "severity": "medium"
+        }
+    ]
+}

@@ -31,6 +31,9 @@ def is_likely_global_variable(var_name: str) -> bool:
     Returns:
         True if likely a global/module-level variable, False otherwise
     """
+    if not var_name:
+        return False
+        
     # Python builtins
     builtins = {
         'list', 'dict', 'str', 'int', 'float', 'bool', 'len', 'print', 

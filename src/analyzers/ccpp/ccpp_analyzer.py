@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Dict, List, Set, Any
 from collections import defaultdict
 
@@ -10,15 +11,23 @@ from analyzers.ccpp.ccpp_evaluator import CCPPEvaluator
 
 class CCPPAnalyzer(BaseAnalyzer):
     """
-    Analyzes Conceptual Cohesion of Pipeline Packages (CCPP).
+    Conceptual Cohesion of Pipeline Packages (CCPP) Analyzer.
     
-    This metric measures how focused a package is on a specific ML pipeline function.
-    It depends on the results of the CCPPAnalyzer and reuses CCPP metrics at package level.
+    Evaluates conceptual cohesion at the package level by detecting if the package
+    mixes responsibilities from different ML pipeline tasks or stages, violating 
+    the package-level Single Responsibility Principle.
     
-    Architecture :
-    - CCPPAnalyzer: Main analyzer, orchestrates analysis
-    - CCPPCalculator: Handles CCPP score calculation
-    - CCPPEvaluator: Matches metrics against rules, generates diagnosis/recommendations
+    Analyzes:
+    1. ML pipeline stage/phase presence (aggregating CCPM metrics from modules)
+    2. Responsibility mixing detection (single vs multiple stages in package)
+    3. ML content presence (ratio of ML modules to total modules)
+    4. Package Functional Purity (combining content ratio and stage focus)
+    
+    Cohesion Levels:
+    - High: Single stage, high density of ML content (focused package)
+    - Moderate: Mostly single stage but with some noise or non-ML files
+    - Low: Distinct pipeline stages mixed together (e.g. Training + Deployment)
+    - Very Low: Multiple phases/stages mixed with high ratio of non-ML content
     """
 
     @property
@@ -27,11 +36,23 @@ class CCPPAnalyzer(BaseAnalyzer):
     
     def __init__(self, session_id: str, local_path: str, context=None):
         super().__init__(session_id, local_path, context)
-        self.calculator = CCPPCalculator(etapas_max=6)
-        self.evaluator = CCPPEvaluator()
-
-    def analyze(self) -> AnalysisResult:
+        pipeline_stages_json_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'pipeline',
+            'pipeline_stages.json'
+        )
         
+        if os.path.exists(pipeline_stages_json_path):
+            with open(pipeline_stages_json_path, 'r') as f:
+                self.config = json.load(f)
+        else:
+            self.config = {"stages": {}}
+            
+        num_stages = len(self.config.get('stages', {}))
+        max_stages = num_stages if num_stages > 0 else 5
+        self.calculator = CCPPCalculator(etapas_max=max_stages)
+        self.evaluator = CCPPEvaluator()
+    def analyze(self) -> AnalysisResult:
         packages = self._discover_packages()
         package_results = {}
         total_ccpp_score = 0
@@ -43,21 +64,14 @@ class CCPPAnalyzer(BaseAnalyzer):
                 module_count=0,
                 details={"message": "No Python packages found to analyze."}
             )
-
         for pkg_path, modules in packages.items():
             package_results[pkg_path] = self._analyze_package(pkg_path, modules)
             total_ccpp_score += package_results[pkg_path]['ccpp_score']
-            
-            
             evaluation = self.evaluator.evaluate_package(pkg_path, package_results[pkg_path])
             if evaluation:
                 messages_list.append(evaluation)
-
         average_ccpp = total_ccpp_score / len(packages)
         final_score = round(average_ccpp * 10, 2)
-        
-        
-
         return self._create_result(
             score=final_score,
             messages=messages_list,  
@@ -79,41 +93,36 @@ class CCPPAnalyzer(BaseAnalyzer):
 
     def _analyze_package(self, pkg_path: str, modules: List[str]) -> Dict[str, Any]:
         """
-        Calculates CCPP for a single package by reusing FPC metrics.
+        Calculates CCPP for a single package by reusing CCPM metrics.
         
         Args:
             pkg_path: Package directory path
             modules: List of module file paths in package
             
         Returns:
-            Dictionary with package CCPP metrics
+            Dictionary with package CCPP metrics, including:
+            - ccpp_score: Final calculated score
+            - purity_level: Qualitative assessment
+            - unique_stages/phases: Counts used for calculation
         """
-        fpc_results = []
+        ccpm_results = []
         for module_path in modules:
-            fpc_result = self.context.get_file_metric(module_path, 'fpc')
-            if fpc_result:
-                fpc_result['file_path'] = module_path
-                fpc_results.append(fpc_result)
-        
-        
-        aggregated = self.calculator.aggregate_package_metrics(fpc_results)
-        
+            ccpm_result = self.context.get_file_metric(module_path, 'ccpm')
+            if ccpm_result:
+                ccpm_result['file_path'] = module_path
+                ccpm_results.append(ccpm_result)
+        aggregated = self.calculator.aggregate_package_metrics(ccpm_results)
         n_total = aggregated['n_total']
         n_ml = aggregated['n_ml']
         all_stages = aggregated['all_stages']
         modules_info = aggregated['modules_info']
-        
         n_etapas = len(all_stages)
-        
-        
         all_phases = set()
-        for fpc_result in fpc_results:
-            all_phases.update(fpc_result.get('phases_detected', []))
-        
-        
-        ccpp_score = self.calculator.calculate_ccpp(n_total, n_ml, n_etapas)
+        for ccpm_result in ccpm_results:
+            all_phases.update(ccpm_result.get('phases_detected', []))
+        n_phases = len(all_phases)
+        ccpp_score = self.calculator.calculate_ccpp(n_total, n_ml, n_etapas, n_phases)
         purity_level = self.calculator.get_purity_level(ccpp_score)
-        
         return {
             "total_modules": n_total,
             "ml_modules": n_ml,
@@ -123,8 +132,7 @@ class CCPPAnalyzer(BaseAnalyzer):
             "ccpp_score": ccpp_score,
             "purity_level": purity_level,
             "modules": modules_info
-        }
-        
+        }  
     def _discover_packages(self) -> Dict[str, List[str]]:
         """
         Identifies packages and their contained modules.
@@ -136,21 +144,15 @@ class CCPPAnalyzer(BaseAnalyzer):
         for file_path in python_files:
             if file_path.endswith('__init__.py'):
                 continue  
-            
             package_path = os.path.dirname(file_path) or '.'
-            packages[package_path].append(file_path)
-            
+            packages[package_path].append(file_path) 
         return dict(packages)
-        
-    def _is_fpc_data_available(self) -> bool:
-        """Checks if any file has FPC data in the context."""
+    def _is_ccpm_data_available(self) -> bool:
+        """Checks if any file has CCPM data in the context."""
         for py_file in self.context.get_all_python_files():
-            if self.context.has_file_metric(py_file, 'fpc'):
+            if self.context.has_file_metric(py_file, 'ccpm'):
                 return True
         return False
-    
-    
-    
     def _format_package_results(self, results: Dict) -> Dict:
         """Formats package results with better structure."""
         formatted = {}
@@ -170,8 +172,7 @@ class CCPPAnalyzer(BaseAnalyzer):
                     "is_pure_package": data['ml_modules'] == data['total_modules'] and data['unique_stages_found'] == 1
                 },
             }
-        return formatted
-        
+        return formatted  
     def _generate_summary(self, results: Dict) -> Dict:
         summary = {"High": 0, "Moderate": 0, "Low": 0, "Very Low": 0}
         for data in results.values():

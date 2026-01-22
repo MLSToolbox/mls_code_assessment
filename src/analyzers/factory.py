@@ -23,6 +23,9 @@ class AnalyzerFactory:
             from analyzers.ml_content import MLContentAnalyzer
             from analyzers.scpm import SCPMAnalyzer
             from analyzers.fcpm import FCPMAnalyzer
+            from analyzers.ccpp import CCPPAnalyzer
+            from analyzers.scpp import SCPPAnalyzer
+            from analyzers.fcpp import FCPPAnalyzer
             
             cls._analyzers = {
                 "pylint": PyLintAnalyzer,
@@ -34,6 +37,9 @@ class AnalyzerFactory:
                 "ml_content": MLContentAnalyzer,
                 "scpm": SCPMAnalyzer,
                 "fcpm": FCPMAnalyzer,
+                "ccpp": CCPPAnalyzer,
+                "scpp": SCPPAnalyzer,
+                "fcpp": FCPPAnalyzer,
             }
         return cls._analyzers
     

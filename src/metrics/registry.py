@@ -443,6 +443,25 @@ METRICS_REGISTRY = {
         references=["FCPM - Functional Cohesion of Pipeline Modules (Internal Definition)"],
         category="cohesion"
     ),
+    "ccpp": MetricMetadata(
+        metric_id="ccpp",
+        name="Cohesion of Coupled Packages",
+        description=(
+            "Measures cohesion between packages that share pipeline resources. "
+            "High values indicate packages are tightly coupled and should be refactored."
+        ),
+        formula="CCPP(P) = sum(C_ij) / (m * (m - 1)), where m = number of direct nodes (packages), and C_ij = 1 if packages share resources.",
+        ideal_range={"min": 0, "max": 1.0, "optimal": ">0.8", "acceptable": "0.6-0.8", "warning": "<0.6"},
+        interpretation={
+            "very_high (0.8-1.0)": "Excellent - Maximum cohesion, packages are tightly coupled",
+            "high (0.6-0.79)": "Good - Strong cohesion between packages",
+            "medium (0.4-0.59)": "Moderate - Some cohesion relationships exist",
+            "low (0.2-0.39)": "Poor - Weak cohesion, packages operate too independently",
+            "very_low (0.0-0.19)": "Critical - Minimal cohesion, packages likely violate SRP, needs refactoring"
+        },
+        references=["CCPP - Cohesion of Coupled Packages (Internal Definition)", "Internal Definition - SCPP"],
+        category="cohesion"
+    ),
 
     "scpp": MetricMetadata(
         metric_id="scpp",
@@ -466,19 +485,6 @@ METRICS_REGISTRY = {
         references=["Internal Definition - SCPP"],
         category="cohesion"
     ),
-    "p-lcom": MetricMetadata(
-        metric_id="p-lcom",
-        name="Package Lack of Cohesion of Modules",
-        description="Measures package fragmentation by counting unconnected groups of modules sharing pipeline resources.",
-        formula="P-LCOM(P) = |ConnectedComponents(G)|",
-        interpretation={
-            "1": "High Cohesion (Single Group)",
-            ">1": "Low Cohesion (Multiple Groups)"
-        },
-        ideal_range={"min": 1, "max": 1, "optimal": "1", "acceptable": "1"},
-        category="cohesion"
-    ),
-
     "fcpp": MetricMetadata(
         metric_id="fcpp",
         name="Functional Cohesion of Pipeline Packages",
