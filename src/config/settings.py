@@ -21,7 +21,10 @@ class Settings:
         "file_structure",
         "ml_content",
         "scpm",
-        "fcpm"
+        "fcpm",
+        "ccpp",
+        "scpp",
+        "fcpp"
     }
     
     # Valid pipeline stages
@@ -87,7 +90,10 @@ AnalyzerType = Literal[
     "file_structure",
     "ml_content",
     "scpm",
-    "fcpm"
+    "fcpm",
+    "ccpp",
+    "scpp",
+    "fcpp"
 ]
 
 PipelineStage = Literal[

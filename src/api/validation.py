@@ -22,6 +22,7 @@ def validate_upload(request) -> Tuple[str, Union[bytes, str]]:
     
     # Check that exactly one source is provided
     if not has_file and not has_git_url:
+        
         raise FileUploadError("Must provide either 'file' (ZIP) or 'git_url' (Git repository)")
     
     if has_file and has_git_url:

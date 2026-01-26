@@ -103,7 +103,7 @@ class SCPMAnalyzer(BaseAnalyzer):
             
             file_result = self._analyze_file(tree, py_file)
             results['files'][py_file] = file_result
-            
+           
             self.context.set_file_metric(py_file, 'scpm', file_result)
             
             scpm = file_result['scpm']

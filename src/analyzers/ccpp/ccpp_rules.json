@@ -1,0 +1,135 @@
+{
+  "rules": [
+    {
+      "id": "P01",
+      "conditions": {
+        "number_of_phases": 0,
+        "number_of_stages": 0,
+        "ml_ratio": 0
+      },
+      "diagnosis": "Package '{package_name}' contains no ML-related code (CCPP = {ccpp_score:.2f}). This package appears to be pure utility/infrastructure code with no pipeline functionality detected.",
+      "recommendation": "ACTION REQUIRED: Rename this package to clearly indicate its non-ML purpose (e.g., 'utils/', 'common/', 'helpers/', or 'infrastructure/'). Move it outside the main ML pipeline directory structure to avoid confusion and improve project organization.",
+      "severity": "medium"
+    },
+    {
+      "id": "P02",
+      "conditions": {
+        "number_of_phases": 0,
+        "number_of_stages": ">1"
+      },
+      "diagnosis": "Package '{package_name}' has unusual structure (CCPP = {ccpp_score:.2f}). Multiple stages detected but no phase classification, indicating potential misclassification or mixed utility code.",
+      "recommendation": "REVIEW NEEDED: This pattern is uncommon. Verify that FPC analysis is correctly identifying ML content. If this is utility code, consolidate into a single utilities package. If it contains ML code, ensure proper phase detection is working.",
+      "severity": "medium"
+    },
+    {
+      "id": "P03",
+      "conditions": {
+        "number_of_phases": ">1",
+        "number_of_stages": ">1",
+        "ml_ratio": 0
+      },
+      "diagnosis": "Package '{package_name}' shows phase/stage detection without ML content (CCPP = {ccpp_score:.2f}). This indicates a potential analysis anomaly.",
+      "recommendation": "INVESTIGATION REQUIRED: Review this package manually. This pattern suggests either: (1) misclassification of utility code, (2) incomplete FPC analysis, or (3) abstract base classes. Consider refactoring if this is utility code.",
+      "severity": "low"
+    },
+    {
+      "id": "P04",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": 0,
+        "ml_ratio": ">0"
+      },
+      "diagnosis": "Package '{package_name}' has ML content with phase classification but no stage detection (CCPP = {ccpp_score:.2f}). This may indicate abstract or incomplete pipeline code.",
+      "recommendation": "VERIFY: Check if this package contains abstract base classes, interfaces, or incomplete implementations. If it's concrete pipeline code, review why stage detection failed. Consider adding proper pipeline stage indicators.",
+      "severity": "low"
+    },
+    {
+      "id": "P05",
+      "conditions": {
+        "number_of_phases": ">1",
+        "ml_ratio": "<1",
+        "average_elems_per_stage": ">1"
+      },
+      "diagnosis": "Very Low Cohesion  The {package_name} package includes several ML phases and non-ML content and some stages are split in several modules.",
+      "recommendation": "Separate non_ML content and reorganize. Move non-ML content to another non_ML package. Consider to create subpackages by stage (data_cleaning, feature_engineering, etc.) if the number of modules for stage is or grows too large.",
+      "severity": "critical"
+    },
+    {
+      "id": "P06",
+      "conditions": {
+        "number_of_phases": ">1",
+        "ml_ratio": "<1",
+        "average_elems_per_stage": 1
+      },
+      "diagnosis": "Low Cohesion  The {package_name} package includes several ML phases and non-ML content.",
+      "recommendation": "Separate non_ML content. Move non-ML content to another non_ML package.",
+      "severity": "high"
+    },
+    {
+      "id": "P07",
+      "conditions": {
+        "number_of_phases": ">1",
+        "ml_ratio": 1,
+        "average_elems_per_stage": 1
+      },
+      "diagnosis": "High Cohesion The {package_name} package includes several ML phases, all related to the pipeline, and each stage has its own module.",
+      "recommendation": "Mantain structure. Consolidate the structure and consider to create subpackages by stage (data_cleaning, feature_engineering, etc.) if the number of modules for stage grows too large.",
+      "severity": "low"
+    },
+    {
+      "id": "P08",
+      "conditions": {
+        "number_of_phases": ">1",
+        "ml_ratio": 1,
+        "average_elems_per_stage": ">1"
+      },
+      "diagnosis": "Medium Cohesion The {package_name} package includes several ML phases, all related to the pipeline, but some stages are split in several modules.",
+      "recommendation": "Group by ML phase. Consolidate modules or subpackages of the same phase in one subpackage. Maintain hierarchy if already organized by phase. Consider to create subpackages by stage (data_cleaning, feature_engineering, etc.) if the number of modules for stage is or grows too large.",
+      "severity": "medium"
+    },
+    {
+      "id": "P09",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": ">1",
+        "ml_ratio": "<1"
+      },
+      "diagnosis": "Medium Cohesion The {package_name} package belongs to a single ML phase but includes non-ML elements.",
+      "recommendation": "Separate non-ML content. Move non-ML content to another non_ML package. For large packages, consider to create subpackages by stage (data_cleaning, feature_engineering, etc.).",
+      "severity": "medium"
+    },
+    {
+      "id": "P10",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": ">1",
+        "ml_ratio": 1
+      },
+      "diagnosis": "High Cohesion The package covers multiple ML stages within one phase.",
+      "recommendation": "Maintain structure. Ensure each stage has its own module or subpackage. Split or merge only to balance size and clarity.",
+      "severity": "low"
+    },
+    {
+      "id": "P11",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": 1,
+        "ml_ratio": "<1"
+      },
+      "diagnosis": "Medium Cohesion The package focuses on one ML stage but includes some unrelated code.",
+      "recommendation": "Keep ML stage isolated and move non-ML code to another non-ML package or reuse existing subpackages if available.",
+      "severity": "medium"
+    },
+    {
+      "id": "P12",
+      "conditions": {
+        "number_of_phases": 1,
+        "number_of_stages": 1,
+        "ml_ratio": 1
+      },
+      "diagnosis": "Very High Cohesion  The package (and its subpackages) focuses exclusively on one ML stage of one phase.",
+      "recommendation": "Maintain and document as a reference model for future pipeline designs.",
+      "severity": "info"
+    }
+  ]
+}
