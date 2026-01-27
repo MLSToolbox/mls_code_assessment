@@ -95,6 +95,7 @@ class CCPMAnalyzer(BaseAnalyzer):
                 'low_cohesion': 0,
                 'very_low_cohesion': 0,
                 'non_ml_files': 0,
+                'not_applicable': 0,
                 'small_files': 0,
                 'scan_mode': self.context.get_scan_mode(),
                 'nloc_threshold': self.nloc_calculator.get_threshold()
@@ -137,6 +138,8 @@ class CCPMAnalyzer(BaseAnalyzer):
             cohesion_level = file_result['cohesion_level']
             if cohesion_level == 'non_ml_file':
                 results['summary']['non_ml_files'] += 1
+            elif cohesion_level == 'not_applicable':
+                results['summary']['not_applicable'] += 1
             elif cohesion_level == 'very_high':
                 results['summary']['very_high_cohesion'] += 1
             elif cohesion_level == 'high':
@@ -149,7 +152,7 @@ class CCPMAnalyzer(BaseAnalyzer):
                 results['summary']['very_low_cohesion'] += 1
             
             # Track small files separately
-            if not file_result['above_nloc_threshold'] and cohesion_level != 'non_ml_file':
+            if not file_result['above_nloc_threshold'] and cohesion_level not in ['non_ml_file', 'not_applicable']:
                 results['summary']['small_files'] += 1
         
         if results['summary']['total_files'] > 0:
@@ -438,12 +441,21 @@ class CCPMAnalyzer(BaseAnalyzer):
             'low': Multiple phases, ML content only (unrelated tasks mixed)
             'very_low': Multiple phases with non-ML content (worst case)
             'non_ml_file': File doesn't contain ML content
+            'not_applicable': Has ML content but no pipeline stages detected (cohesion analysis not applicable)
         """
         # Non-ML files don't count for cohesion
+        # A file is non_ml_file ONLY if it has non-ML content AND no stages detected
+        # This ensures files with ml_content_only=True are never classified as non_ml_file
         if not ml_content_only and unique_stages == 0:
             return 'non_ml_file'
         
-        # No stages detected
+        # No stages detected BUT has ML content only
+        # This can happen if ML keywords are found but no specific pipeline stages detected
+        # Mark as not_applicable since cohesion analysis requires pipeline stages
+        if unique_stages == 0 and ml_content_only:
+            return 'not_applicable'
+        
+        # No stages detected AND no ML content - clearly non-ML file
         if unique_stages == 0:
             return 'non_ml_file'
         

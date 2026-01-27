@@ -86,7 +86,8 @@ class SCPPAnalyzer(BaseAnalyzer):
             score=round(final_score, 2),
             messages=messages,
             module_count=len(scpp_scores),
-            details=results
+            details=results,
+            group_key='by_package'
         )
 
     def _generate_messages(self, results: Dict) -> List[Dict[str, Any]]:

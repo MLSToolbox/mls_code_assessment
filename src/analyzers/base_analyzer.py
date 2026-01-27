@@ -112,7 +112,7 @@ class BaseAnalyzer(ABC):
         messages: Union[Dict[str, Any], List[Dict[str, Any]]],
         module_count: int,
         details: Optional[Dict[str, Any]] = None,
-        
+        group_key: str = 'by_file'
     ) -> AnalysisResult:
         """
         Create an AnalysisResult object.
@@ -120,24 +120,24 @@ class BaseAnalyzer(ABC):
         Args:
             score: Numeric score for the analysis
             messages: Either:
-                - Dict (old format): {'total': int, 'by_file': {...}} for backward compatibility
+                - Dict (old format): {'total': int, 'by_file'/'by_package': {...}} for backward compatibility
                 - List[Dict] (new format): List of message dicts with file, diagnosis, recommendation, etc.
             module_count: Number of modules analyzed
             details: Optional additional details
-            group_by: Key to use for grouping messages (default: 'by_file')
+            group_key: Key to use for grouping messages (default: 'by_file', can be 'by_package' for package-level metrics)
         
         Returns:
             AnalysisResult object
         """
-        # Convert list format to proper structure with by_file grouping
+        # Convert list format to proper structure with grouping
         if isinstance(messages, list):
             # New format: list of detailed messages
-            by_file = {}
+            grouped = {}
             for msg in messages:
                 file_path = msg.get('file', 'unknown')
-                if file_path not in by_file:
-                    by_file[file_path] = []
-                by_file[file_path].append({
+                if file_path not in grouped:
+                    grouped[file_path] = []
+                grouped[file_path].append({
                     'diagnosis': msg.get('diagnosis'),
                     'recommendation': msg.get('recommendation'),
                     'severity': msg.get('severity'),
@@ -146,10 +146,10 @@ class BaseAnalyzer(ABC):
             
             messages_dict = {
                 'total': len(messages),
-                "by_file": by_file
+                group_key: grouped
             }
         else:
-            # Old format: dict with total and by_file
+            # Old format: dict with total and by_file/by_package
             messages_dict = messages
         
         return AnalysisResult(

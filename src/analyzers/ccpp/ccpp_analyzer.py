@@ -56,7 +56,8 @@ class CCPPAnalyzer(BaseAnalyzer):
                 score=0, 
                 messages=[],
                 module_count=0,
-                details={"message": "No Python packages found to analyze."}
+                details={"message": "No Python packages found to analyze."},
+                group_key='by_package'
             )
         for pkg_path, modules in packages.items():
             package_results[pkg_path] = self._analyze_package(pkg_path, modules)
@@ -82,7 +83,7 @@ class CCPPAnalyzer(BaseAnalyzer):
                 },
                 "packages": self._format_package_results(package_results)
             },
-            
+            group_key='by_package'
         )
     def _analyze_package(self, pkg_path: str, modules: List[str]) -> Dict[str, Any]:
         """
