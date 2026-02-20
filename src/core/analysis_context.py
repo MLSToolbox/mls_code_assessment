@@ -31,6 +31,7 @@ class AnalysisContext:
         session_id: str, 
         local_path: str, 
         pipeline_metadata: Optional[Dict[str, Any]] = None,
+        tree_metadata: Optional[Dict[str, Any]] = None,
         all_files: bool = False
     ):
         """
@@ -48,6 +49,7 @@ class AnalysisContext:
         self._file_cache: Dict[str, FileAnalysisCache] = {}
         self._global_metrics: Dict[str, Any] = {}
         self._pipeline_metadata: Optional[Dict[str, Any]] = pipeline_metadata
+        self._tree_metadata: Optional[Dict[str, Any]] = tree_metadata
         self._all_files = all_files
         self._python_files_cache: Optional[List[str]] = None  # Cache for file discovery
     
@@ -324,6 +326,14 @@ class AnalysisContext:
             Pipeline metadata from PipelineAnalyzer or None if not available
         """
         return self._pipeline_metadata
+    def get_tree_metadata(self) -> Optional[Dict[str, Any]]:
+        """
+        Get tree structure metadata.
+        
+        Returns:
+            Tree structure metadata from TreeGenerator or None if not available
+        """
+        return self._tree_metadata
     
     def get_ml_files_by_stage(self, stage: Optional[str] = None) -> Dict[str, List[str]]:
         """

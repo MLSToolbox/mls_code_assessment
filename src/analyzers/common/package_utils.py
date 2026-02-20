@@ -5,43 +5,6 @@ Package Detection Utilities.
 import os
 from typing import List
 
-def get_package_nodes(package_path: str) -> List[str]:
-    """
-    Get all relevant nodes (modules and subpackages) directly inside a package.
-    Used for package-level analysis (SCPP, FCPP).
-    """
-    nodes = []
-    try:
-        for item in os.listdir(package_path):
-            if item in ["__pycache__", "test", "tests", "examples", ".pytest_cache", "docs", "venv", ".venv"]:
-                continue
-            
-            abs_path = os.path.join(package_path, item)
-            
-            if os.path.isfile(abs_path):
-                # Include Python files, exclude __init__ (it's the package definition)
-                # and __main__ (entry point, usually behaves as a consumer only)
-                if item.endswith('.py') and item not in ['__init__.py', '__main__.py', 'conftest.py', 'setup.py']:
-                    nodes.append(abs_path)
-            elif os.path.isdir(abs_path):
-                # Include subpackages
-                if is_package(abs_path):
-                    nodes.append(abs_path)
-    except (PermissionError, FileNotFoundError):
-        pass
-    
-    return nodes
-
-def is_package(dir_path: str) -> bool:
-    """
-    Check if a directory is a valid Python package (contains .py files).
-    Relaxed check: doesn't strictly require __init__.py for implicit namespaces, 
-    but must contain python code to be relevant.
-    """
-    for _, _, files in os.walk(dir_path):
-        if any(f.endswith(".py") for f in files):
-            return True
-    return False
 
 def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
     """
@@ -61,11 +24,7 @@ def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
     visited = set()
     groups = []
     
-    # Extract just the basename for cleaner reporting, assuming 'nodes' might be full paths
-    # But to be safe and generic, we let the caller handle naming, 
-    # OR we standardize on basenames since that's what SCPP/FCPP use.
-    # Let's standardize here to avoid code rep in analyzers:
-    node_names = [os.path.basename(n) for n in nodes]
+    
     
     for i in range(m):
         if i not in visited:
@@ -79,7 +38,7 @@ def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
                  visited.add(i)
                  while stack:
                      curr = stack.pop()
-                     component.append(node_names[curr])
+                     component.append(nodes[curr])
                      # Get neighbors
                      neighbors = adjacency.get(curr, set())
                      for neighbor in neighbors:
@@ -95,7 +54,6 @@ def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
                  # The metrics define "Isolated" as having 0 edges.
                  pass
 
-    # Re-implementing simplified generic DFS that captures ALL components strictly
     visited = set()
     all_components = []
     
@@ -113,12 +71,11 @@ def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
                         stack.append(neighbor)
             all_components.append(component_indices)
             
-    # Now categorize into Groups vs Isolated
     groups = []
     isolated = []
     
     for comp_indices in all_components:
-        comp_names = [node_names[idx] for idx in comp_indices]
+        comp_names = [nodes[idx] for idx in comp_indices]
         if len(comp_indices) > 1:
             groups.append(comp_names)
         else:
@@ -144,13 +101,14 @@ def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
             visited_connected.add(i)
             while stack:
                 curr = stack.pop()
-                comp.append(node_names[curr])
+                comp.append(nodes[curr])
                 for neighbor in adjacency.get(curr, set()):
                     if neighbor not in visited_connected:
                         visited_connected.add(neighbor)
                         stack.append(neighbor)
             groups.append(comp)
             
-    isolated_nodes = [node_names[i] for i in range(m) if i not in connected_indices]
+    isolated_nodes = [nodes[i] for i in range(m) if i not in connected_indices]
     
     return groups, isolated_nodes
+

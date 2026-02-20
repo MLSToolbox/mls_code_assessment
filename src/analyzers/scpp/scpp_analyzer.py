@@ -5,7 +5,7 @@ from collections import defaultdict
 from core.analysis_context import AnalysisContext
 from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
-from analyzers.common.package_utils import get_package_nodes, is_package, find_connected_groups
+from analyzers.common.package_utils import find_connected_groups
 from analyzers.common.variable_detection import is_likely_global_variable, get_files_accessed
 from analyzers.common.ast_utils import get_attribute_path
 from analyzers.scpp.scpp_evaluator import SCPPEvaluator
@@ -32,6 +32,7 @@ class SCPPAnalyzer(BaseAnalyzer):
     def analyzer_id(self) -> str:
         return "scpp"
     def analyze(self) -> AnalysisResult:
+        tree_metadata=self.context.get_tree_metadata()
         results = {
             'packages': {},
             'summary': {
@@ -40,14 +41,47 @@ class SCPPAnalyzer(BaseAnalyzer):
                 'average_scpp': 0.0
             }
         }
-        package_dirs = set()
-        for root, dirs, files in os.walk(self.local_path):
-            if is_package(root):
-                package_dirs.add(root)
-        scpp_scores = []
-        for package_path in package_dirs:
-            graph_data = self._analyze_package_graph(package_path)
-            if graph_data['valid']:
+        self._get_packages_scpp_metrics(tree_metadata,results=results)
+        if results["packages"]:
+            results['summary']['average_scpp'] =round( sum(results["packages"][package_path]["scpp"] if results["packages"][package_path]["valid"] else 0 for package_path in results["packages"]) / len(results["packages"]),3)
+            final_score = round(results['summary']['average_scpp'] * 10,3)
+            results["packages"]=dict(reversed(list(results["packages"].items())))
+        else:
+            final_score = 0.0
+        messages=self._generate_messages(results)
+        return self._create_result(
+            score=final_score,
+            messages=messages,
+            module_count=len(results["packages"]),
+            details=results,
+            group_key='by_package'
+        )
+        
+    def _get_packages_scpp_metrics(self,node,current_path="",results=None):
+        """
+        Recursively traverses the AST to find packages and compute SCPP metrics.
+        
+        Args:
+            node: Current node in the AST
+            current_path: Path to the current node
+            results: Dictionary to store the results
+        
+        Returns:
+            List of package file paths
+        """
+        if node["type"]=="file"  and node["name"].endswith(".py") and node["name"]!="__init__.py":
+            return node["path"].replace("/","",1)
+        packages_file_path=[]  
+        if "children" in node:
+            for child in node["children"]:
+                module=self._get_packages_scpp_metrics(child,node["path"],results)
+                if isinstance(module,list):
+                    packages_file_path.extend(module)
+                else:
+                    packages_file_path.append(module)
+        if node["path"] !="/" and node["type"]=="directory":
+              graph_data = self._analyze_package_graph(packages_file_path)
+              if graph_data['valid']:
                 groups = graph_data['groups']
                 indirect_shared_pairs = 0
                 for group in groups:
@@ -61,54 +95,49 @@ class SCPPAnalyzer(BaseAnalyzer):
                     'scpp': round(scpp_value, 3),
                     **graph_data
                 }
-                
-                rel_pkg_path = os.path.relpath(package_path, self.local_path)
-                results['packages'][rel_pkg_path] = package_result 
-                scpp_scores.append(scpp_value)
-                
-                # Stats update
-                if scpp_value >= 0.8: results['summary']['very_high'] += 1
-                elif scpp_value >= 0.6: results['summary']['high'] += 1
-                elif scpp_value >= 0.4: results['summary']['medium'] += 1
-                elif scpp_value >= 0.2: results['summary']['low'] += 1
-                else: results['summary']['very_low'] += 1
+                results['packages'][node["path"].replace("/","",1)] = package_result 
+                if scpp_value >= 0.8:
+                    results['summary']['very_high'] += 1
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "very_high"
+                elif scpp_value >= 0.6: 
+                    results['summary']['high'] += 1
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "high"
+                elif scpp_value >= 0.4: 
+                    results['summary']['medium'] += 1
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "medium"
+                elif scpp_value >= 0.2: 
+                    results['summary']['low'] += 1
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "low"
+                else: 
+                    results['summary']['very_low'] += 1
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "very_low"
+                results['summary']['total_packages'] += 1
+              else:
+                package_result={
+                    **graph_data,
+                    "scpp":None,
+                    "cohesion_level":"not_applicable"
 
-        results['summary']['total_packages'] = len(scpp_scores)
-        if scpp_scores:
-            results['summary']['average_scpp'] = sum(scpp_scores) / len(scpp_scores)
-            final_score = results['summary']['average_scpp'] * 10
-        else:
-            final_score = 0.0
-
-        messages = self._generate_messages(results)
-        
-        return self._create_result(
-            score=round(final_score, 2),
-            messages=messages,
-            module_count=len(scpp_scores),
-            details=results,
-            group_key='by_package'
-        )
-
+                }
+                results['packages'][node["path"].replace("/","",1)] = package_result 
+                results['summary']['total_packages'] += 1
+        return packages_file_path
     def _generate_messages(self, results: Dict) -> List[Dict[str, Any]]:
         messages = []
         for pkg_path, data in results['packages'].items():
+
             msg = self.evaluator.evaluate_package(pkg_path, data)
             if msg:
                 messages.append(msg)
         return messages
-    def _analyze_package_graph(self, package_path: str) -> Dict[str, Any]:
+    def _analyze_package_graph(self, nodes: List[str]) -> Dict[str, Any]:
         """Builds resources graph for the package."""
-        nodes = get_package_nodes(package_path)
         m = len(nodes)
         if m < 2:
-            return {'valid': False, 'n_nodes': m, 'nodes': [os.path.basename(n) for n in nodes]}
+            return {'valid': False, 'n_nodes': m,"connections":[],"groups":[],"isolated_nodes":[],"nodes": nodes,"n_pairs":0,"n_shared":0}
         node_resources = {}
         for node_path in nodes:
-            if os.path.isdir(node_path):
-                resources = self._get_subpackage_resources(node_path)
-            else:
-                resources = self._extract_file_resources(node_path)
+            resources = self._extract_file_resources(node_path)
             node_resources[node_path] = resources
         connections = []
         connected_nodes = set()
@@ -123,8 +152,8 @@ class SCPPAnalyzer(BaseAnalyzer):
                   
                   if intersection:
                         connections.append({
-                            'node_a': os.path.basename(node_list[i]),
-                            'node_b': os.path.basename(node_list[j]),
+                            'node_a': node_list[i],
+                            'node_b': node_list[j],
                             'shared_resources': list(intersection)[:5]
                         })
                         adj_indices[i].add(j)
@@ -132,26 +161,16 @@ class SCPPAnalyzer(BaseAnalyzer):
 
         # Find Groups and Isolated Nodes logic decoupled to package_utils
         groups, isolated_nodes = find_connected_groups(node_list, adj_indices)
-        
         return {
             'valid': True,
             'n_nodes': m,
             'connections': connections,
             'groups': groups,
             'isolated_nodes': isolated_nodes,
-            'nodes': [os.path.basename(n) for n in nodes],
+            'nodes': nodes,
             'n_pairs': (m * (m - 1)) // 2,
             'n_shared': len(connections)
         }
-    def _get_subpackage_resources(self, subpackage_path: str) -> Set[str]:
-        resources = set()
-        for root, _, files in os.walk(subpackage_path):
-            for file in files:
-                if file.endswith('.py'):
-                    file_path = os.path.join(root, file)
-                    resources.update(self._extract_file_resources(file_path))
-        return resources
-
     def _extract_file_resources(self, file_path: str) -> Set[str]:
         resources = set()
         tree = self.context.get_file_ast(file_path)

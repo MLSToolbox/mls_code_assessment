@@ -1,7 +1,6 @@
 from typing import Dict, Any, Tuple, Union
 from datetime import datetime
 from werkzeug.datastructures import FileStorage
-
 from session.session_manager import SessionManager
 from session.session_storage import SessionStorage
 from analyzers.factory import AnalyzerFactory
@@ -109,6 +108,8 @@ class AnalysisService:
         # Get pipeline metadata
         metadata = session.get_metadata()
         pipeline_metadata = metadata.get("auto_detected_pipeline")
+        tree_metadata = metadata.get("tree_structure")
+
         
         # Apply pipeline overrides FIRST if they exist
         # This ensures all analyzers use the updated metadata
@@ -126,6 +127,7 @@ class AnalysisService:
             session_id, 
             session.local_path,
             pipeline_metadata=pipeline_metadata,
+            tree_metadata=tree_metadata,
             all_files=analysis_request.all_files
         )
         

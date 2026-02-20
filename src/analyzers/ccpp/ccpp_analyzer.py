@@ -1,10 +1,12 @@
 import os
 import json
 from typing import Dict, List, Set, Any
+import ast
 from collections import defaultdict
 from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.ccpp.ccpp_calculator import CCPPCalculator
+from core.tree_generator import TreeGenerator
 from analyzers.ccpp.ccpp_evaluator import CCPPEvaluator
 class CCPPAnalyzer(BaseAnalyzer):
     """
@@ -47,11 +49,16 @@ class CCPPAnalyzer(BaseAnalyzer):
         self.calculator = CCPPCalculator(etapas_max=max_stages)
         self.evaluator = CCPPEvaluator()
     def analyze(self) -> AnalysisResult:
-        packages = self._discover_packages()
-        package_results = {}
-        total_ccpp_score = 0
+        tree_metadata=self.context.get_tree_metadata()
+        packages_result=[]
         messages_list = []
-        if not packages:
+        self._get_packages_ccpp_metrics(tree_metadata,dir_list=packages_result,messages_list=messages_list)
+        packages_result.reverse()
+        messages_list.reverse()
+        total_ccpp_score=sum([d["ccpp_result"]["ccpp_score"] for d in packages_result])
+        average_ccpp=total_ccpp_score/len(packages_result)
+        final_score = round(average_ccpp * 10, 2)
+        if not packages_result:
             return self._create_result(
                 score=0, 
                 messages=[],
@@ -59,53 +66,78 @@ class CCPPAnalyzer(BaseAnalyzer):
                 details={"message": "No Python packages found to analyze."},
                 group_key='by_package'
             )
-        for pkg_path, modules in packages.items():
-            package_results[pkg_path] = self._analyze_package(pkg_path, modules)
-            total_ccpp_score += package_results[pkg_path]['ccpp_score']
-            evaluation = self.evaluator.evaluate_package(pkg_path, package_results[pkg_path])
-            if evaluation:
-                messages_list.append(evaluation)
-        average_ccpp = total_ccpp_score / len(packages)
-        final_score = round(average_ccpp * 10, 2)
         return self._create_result(
             score=final_score,
             messages=messages_list,  
-            module_count=len(self.context.get_all_python_files()),
+            module_count=len(packages_result),
             details={
                 "summary": {
-                    "total_packages_analyzed": len(packages),
+                    "total_packages_analyzed": len(packages_result),
                     "average_ccpp_score": round(average_ccpp, 4),
                     "overall_quality": self.calculator.get_overall_quality(average_ccpp),
-                    "packages_needing_attention": len([p for p in package_results.values() if p['ccpp_score'] < 0.6]),
-                    "packages_with_good_purity": len([p for p in package_results.values() if p['ccpp_score'] >= 0.6]),
+                    "packages_needing_attention": len([p for p in packages_result if p['ccpp_result']['ccpp_score'] < 0.6]),
+                    "packages_with_good_purity": len([p for p in packages_result if p['ccpp_result']['ccpp_score'] >= 0.6]),
                     "etapas_max": self.calculator.get_etapas_max(),
-                    "purity_summary": self._generate_summary(package_results)
+                    "cohesion_summary": self._generate_summary(packages_result)
                 },
-                "packages": self._format_package_results(package_results)
+                "packages": self._format_package_results(packages_result)
             },
             group_key='by_package'
         )
-    def _analyze_package(self, pkg_path: str, modules: List[str]) -> Dict[str, Any]:
+        
+    def _get_packages_ccpp_metrics(self,node,current_path="",dir_list=None,messages_list=None):
         """
-        Calculates CCPP for a single package by reusing CCPM metrics.
+        Recursively traverses the directory tree to collect metrics from all packages.
         
         Args:
-            pkg_path: Package directory path
-            modules: List of module file paths in package
-            
+            node: The current node in the directory tree
+            current_path: The current path in the directory tree
+            dir_list: List to store directory metrics
+            messages_list: List to store messages
+        
         Returns:
-            Dictionary with package CCPP metrics, including:
-            - ccpp_score: Final calculated score
-            - purity_level: Qualitative assessment
-            - unique_stages/phases: Counts used for calculation
+            List of directory metrics
         """
-        ccpm_results = []
-        for module_path in modules:
-            ccpm_result = self.context.get_file_metric(module_path, 'ccpm')
-            if ccpm_result:
-                ccpm_result['file_path'] = module_path
-                ccpm_results.append(ccpm_result)
+        if node["type"]=="file" and node["name"].endswith(".py") and node["name"]!="__init__.py":
+            return self.context.get_file_metric(node["path"].replace("/","",1), 'ccpm')
+        ccpm_results:List[Dict[str,Any]]=[]
+        if "children" in node:
+            for child in node["children"]:
+               
+                ccpm=self._get_packages_ccpp_metrics(child,node["path"],dir_list,messages_list)
+                if ccpm:
+                    if isinstance(ccpm,dict):
+                        ccpm:Dict[str,Any]=ccpm
+                        ccpm["file_path"]=child["path"]
+                        ccpm_results.append(ccpm)
+                    else:
+                        ccpm_results.extend(ccpm)
+        
+        if node["path"] != "/" and node["type"]=="directory":
+            path=node["path"].replace("/","",1)
+            ccpm_result=self._analyze_package(path,ccpm_results)
+            evaluation=self.evaluator.evaluate_package(path,ccpm_result)
+            if evaluation:
+                messages_list.append(evaluation)
+            dir_list.append({
+            "name":node["name"],
+            "path":path,
+            "ccpp_result":ccpm_result
+            })
+        return ccpm_results
+    def _analyze_package(self,pkg_path,ccpm_results:List[Any])->Dict[str,Any]:
+        """
+        Analyzes a package by aggregating metrics from its modules.
+        
+        Args:
+            pkg_path: The path to the package
+            ccpm_results: List of metrics from modules in the package
+        
+        Returns:
+            Dictionary with package metrics
+        """
         aggregated = self.calculator.aggregate_package_metrics(ccpm_results)
+        
         n_total = aggregated['n_total']
         n_ml = aggregated['n_ml']
         all_stages = aggregated['all_stages']
@@ -116,7 +148,7 @@ class CCPPAnalyzer(BaseAnalyzer):
             all_phases.update(ccpm_result.get('phases_detected', []))
         n_phases = len(all_phases)
         ccpp_score = self.calculator.calculate_ccpp(n_total, n_ml, n_etapas, n_phases)
-        purity_level = self.calculator.get_purity_level(ccpp_score)
+        cohesion_level = self.calculator.get_cohesion_level(ccpp_score)
         return {
             "total_modules": n_total,
             "ml_modules": n_ml,
@@ -124,52 +156,32 @@ class CCPPAnalyzer(BaseAnalyzer):
             "stage_types": sorted(list(all_stages)),
             "phases_detected": sorted(list(all_phases)),
             "ccpp_score": ccpp_score,
-            "purity_level": purity_level,
+            "cohesion_level": cohesion_level,
             "modules": modules_info
-        }  
-    def _discover_packages(self) -> Dict[str, List[str]]:
-        """
-        Identifies packages and their contained modules.
-        A package is a directory containing Python files.
-        """
-        packages: Dict[str, List[str]] = defaultdict(list)
-        python_files = self.context.get_all_python_files()
-
-        for file_path in python_files:
-            if file_path.endswith('__init__.py'):
-                continue  
-            package_path = os.path.dirname(file_path) or '.'
-            packages[package_path].append(file_path) 
-        return dict(packages)
-    def _is_ccpm_data_available(self) -> bool:
-        """Checks if any file has CCPM data in the context."""
-        for py_file in self.context.get_all_python_files():
-            if self.context.has_file_metric(py_file, 'ccpm'):
-                return True
-        return False
-    def _format_package_results(self, results: Dict) -> Dict:
+        } 
+    def _format_package_results(self, results: List) -> Dict:
         """Formats package results with better structure."""
         formatted = {}
-        for pkg_path, data in results.items():
-            formatted[pkg_path] = {
+        for data in results:
+            formatted[data["path"]] = {
                 "metrics": {
-                    "total_modules": data['total_modules'],
-                    "ml_modules": data['ml_modules'],
-                    "ccpp_score": data['ccpp_score'],
-                    "purity_level": data['purity_level']
+                    "total_modules": data['ccpp_result']['total_modules'],
+                    "ml_modules": data['ccpp_result']['ml_modules'],
+                    "ccpp_score": data['ccpp_result']['ccpp_score'],
+                    "cohesion_level": data['ccpp_result']['cohesion_level']
                 },
-                "phases_detected": data['phases_detected'],
-                "stages_detected": data['stage_types'],
+                "phases_detected": data['ccpp_result']['phases_detected'],
+                "stages_detected": data['ccpp_result']['stage_types'],
                 "quality_indicators": {
-                    "needs_refactoring": data['ccpp_score'] < 0.6,
-                    "has_ml_content": data['ml_modules'] > 0,
-                    "is_pure_package": data['ml_modules'] == data['total_modules'] and data['unique_stages_found'] == 1
+                    "needs_refactoring": data['ccpp_result']['ccpp_score'] < 0.6,
+                    "has_ml_content": data['ccpp_result']['ml_modules'] > 0,
+                    "is_pure_package": data['ccpp_result']['ml_modules'] == data['ccpp_result']['total_modules'] and data['ccpp_result']['unique_stages_found'] == 1
                 },
             }
         return formatted  
-    def _generate_summary(self, results: Dict) -> Dict:
-        summary = {"High": 0, "Moderate": 0, "Low": 0, "Very Low": 0}
-        for data in results.values():
-            level = data['purity_level']
+    def _generate_summary(self, results: List) -> Dict:
+        summary = {"very_high": 0, "high": 0, "medium": 0, "low": 0, "very_low": 0}
+        for data in results:
+            level = data['ccpp_result']['cohesion_level']
             summary[level] += 1
         return summary

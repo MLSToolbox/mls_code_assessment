@@ -1,4 +1,3 @@
-
 import ast
 import os
 import logging
@@ -8,7 +7,7 @@ from collections import defaultdict
 from core.analysis_context import AnalysisContext
 from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
-from analyzers.common.package_utils import get_package_nodes, is_package, find_connected_groups
+from analyzers.common.package_utils import find_connected_groups
 from analyzers.fcpp.fcpp_evaluator import FCPPEvaluator
 
 class FCPPAnalyzer(BaseAnalyzer):
@@ -37,6 +36,7 @@ class FCPPAnalyzer(BaseAnalyzer):
         return "fcpp"
 
     def analyze(self) -> AnalysisResult:
+        tree_metadata=self.context.get_tree_metadata()
         results = {
             'packages': {},
             'summary': {
@@ -45,16 +45,47 @@ class FCPPAnalyzer(BaseAnalyzer):
                 'average_fcpp': 0.0
             }
         }
-        package_dirs = set()
-        for root, dirs, files in os.walk(self.local_path):
-            if is_package(root):
-                package_dirs.add(root)
+        self._get_packages_fcpp_metrics(tree_metadata,results=results)
+        if results["packages"]:
+            results['summary']['average_fcpp'] = round(sum([results["packages"][package_path]["fcpp"] if results["packages"][package_path]["valid"] else 0  for package_path in results["packages"]]) / len(results["packages"]),3)
+            results["packages"]=dict(reversed(list(results["packages"].items())))
+            final_score =round( results['summary']['average_fcpp'] * 10,3)
+        else :
+            final_score = 0.0
+        messages=self._generate_messages(results)
+        return self._create_result(
+            score=final_score,
+            messages=messages,
+            module_count= len(results["packages"]),
+            details=results,
+            group_key='by_package'
+        )
+    def _get_packages_fcpp_metrics(self,node,current_path="",results=None):
+        """
+        Recursively traverses the AST to find packages and compute FCPP metrics.
         
-        fcpp_scores = []
-        for package_path in package_dirs:
-            graph_data = self._analyze_functional_connectivity(package_path)
-            
-            if graph_data['valid']:
+        Args:
+            node: Current node in the AST
+            current_path: Path to the current node
+            results: Dictionary to store the results
+        
+        Returns:
+            List of package file paths
+        """
+        if node["type"]=="file"  and node["name"].endswith(".py") and node["name"]!="__init__.py":
+            return node["path"].replace("/","",1)
+        packages_file_path=[]  
+        if "children" in node:
+            for child in node["children"]:
+                module=self._get_packages_fcpp_metrics(child,node["path"],results)
+                if isinstance(module,list):
+                    packages_file_path.extend(module)
+                else:
+                    packages_file_path.append(module)
+                
+        if node["path"] !="/" and node["type"]=="directory":
+            graph_data=self._analyze_functional_connectivity(node["path"],packages_file_path)
+            if graph_data["valid"] :
                 m = graph_data['n_nodes']
                 connections = graph_data['connections_count'] 
                 total_pairs = m * (m - 1)
@@ -62,69 +93,51 @@ class FCPPAnalyzer(BaseAnalyzer):
                 package_result = {
                     **graph_data,
                     'fcpp': round(fcpp_value, 3),
-                    'n_groups': graph_data['n_groups'],
-                    'groups': graph_data['groups']
                 }
-                
-                rel_pkg_path = os.path.relpath(package_path, self.local_path)
-                results['packages'][rel_pkg_path] = package_result
-                fcpp_scores.append(fcpp_value)
-                if fcpp_value >= 0.8: results['summary']['very_high'] += 1
-                elif fcpp_value >= 0.6: results['summary']['high'] += 1
-                elif fcpp_value >= 0.4: results['summary']['medium'] += 1
-                elif fcpp_value >= 0.2: results['summary']['low'] += 1
-                else: results['summary']['very_low'] += 1
-        
-        results['summary']['total_packages'] = len(fcpp_scores)
-        if fcpp_scores:
-            results['summary']['average_fcpp'] = sum(fcpp_scores) / len(fcpp_scores)
-            final_score = results['summary']['average_fcpp'] * 10
-        else:
-            final_score = 0.0
-            
-        messages = self._generate_messages(results)
-        
-        return self._create_result(
-            score=round(final_score, 2),
-            messages=messages,
-            module_count=len(fcpp_scores),
-            details=results,
-            group_key='by_package'
-        )
+                results["packages"][node["path"].replace("/","",1)]=package_result
+                if fcpp_value >= 0.8: 
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "very_high"
+                    results['summary']['very_high'] += 1 
+                elif fcpp_value >= 0.6: 
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "high"
+                    results['summary']['high'] += 1
+                elif fcpp_value >= 0.4: 
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "medium"
+                    results['summary']['medium'] += 1
+                elif fcpp_value >= 0.2: 
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "low"
+                    results['summary']['low'] += 1
+                else: 
+                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "very_low"
+                    results['summary']['very_low'] += 1
+                results["summary"]["total_packages"]+=1
+            else:
+                package_result={
+                    **graph_data,
+                    "fcpp":None,
+                    "cohesion_level":"not_applicable",
+                    "n_groups":0,
+                    "groups":[]
+                }
+                results["packages"][node["path"].replace("/","",1)]=package_result
+                results["summary"]["total_packages"]+=1
+        return packages_file_path
 
-    def _generate_messages(self, results: Dict) -> List[Dict[str, Any]]:
-        messages = []
-        for pkg_path, data in results['packages'].items():
-            msg = self.evaluator.evaluate_package(pkg_path, data)
-            if msg:
-                messages.append(msg)
-        return messages
-
-    def _analyze_functional_connectivity(self, package_path: str) -> Dict[str, Any]:
+    def _analyze_functional_connectivity(self, package_path: str,nodes:List[str]) -> Dict[str, Any]:
         """
         Builds the functional call graph for the package and computes connectivity.
         """
-        nodes = get_package_nodes(package_path)
         m = len(nodes)
-        
         if m < 2:
-            return {'valid': False, 'n_nodes': m, 'nodes': [os.path.basename(n) for n in nodes]}
+            return {'valid': False, 'n_nodes': m, 'nodes': nodes,'connections_count':0,'n_groups':0,'groups':[],"isolated_nodes":[],"connections":[]}
 
         node_to_idx = {n: i for i, n in enumerate(nodes)}
         file_to_node_idx = {}
         definitions = defaultdict(list) 
         for idx, node_path in enumerate(nodes):
-            if os.path.isfile(node_path):
-                file_to_node_idx[node_path] = idx
-                files_to_scan = [node_path]
-            else:
-                files_to_scan = []
-                for root, _, files in os.walk(node_path):
-                    for f in files:
-                        if f.endswith('.py'):
-                            full_p = os.path.join(root, f)
-                            files_to_scan.append(full_p)
-                            file_to_node_idx[full_p] = idx
+            
+            file_to_node_idx[node_path] = idx
+            files_to_scan = [node_path]
                             
             for f_path in files_to_scan:
                 tree = self.context.get_file_ast(f_path)
@@ -159,7 +172,7 @@ class FCPPAnalyzer(BaseAnalyzer):
                 if used_name and used_name in imported_names:
                      target = imported_names[used_name]
                      if target != owner_idx:
-                         detail = f"{used_name} (in {os.path.basename(f_path)})"
+                         detail = f"{used_name} (in {f_path})"
                          adj[owner_idx][target].add(detail)
         
         R = [[False] * m for _ in range(m)]
@@ -219,7 +232,7 @@ class FCPPAnalyzer(BaseAnalyzer):
                         connected = True
                         if "Shared Dependency" not in found_types:
                              found_types.append("Shared Dependency")
-                             found_reasons.append(f"Both use: {os.path.basename(nodes[t])}")
+                             found_reasons.append(f"Both use: {nodes[t]}")
                         break
                 if connected:
                     connections_count += 1
@@ -230,8 +243,8 @@ class FCPPAnalyzer(BaseAnalyzer):
                     final_reason = "; ".join(found_reasons)
                         
                     connections_list.append({
-                        'node_a': os.path.basename(nodes[i]),
-                        'node_b': os.path.basename(nodes[j]),
+                        'node_a': nodes[i],
+                        'node_b': nodes[j],
                         'type': final_type,
                         'reason': final_reason
                     })
@@ -239,14 +252,22 @@ class FCPPAnalyzer(BaseAnalyzer):
         return {
             'valid': True,
             'n_nodes': m,
-            'nodes': [os.path.basename(n) for n in nodes],
+            'nodes': nodes,
             'connections_count': connections_count,
             'n_groups': len(groups),
             'groups': groups,
             'isolated_nodes': isolated,
             'connections': connections_list
-        }
-
+        }    
+    def _generate_messages(self, results: Dict) -> List[Dict[str, Any]]:
+        messages = []
+        for pkg_path, data in results['packages'].items():
+            if data["valid"] == False:
+                continue
+            msg = self.evaluator.evaluate_package(pkg_path, data)
+            if msg:
+                messages.append(msg)
+        return messages
     def _resolve_import(self, node: ast.AST, current_file: str, package_root: str, 
                        nodes: List[str], node_to_idx: Dict[str, int], definitions: Dict[str, List[int]]) -> Dict[str, int]:
         """

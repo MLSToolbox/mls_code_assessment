@@ -42,6 +42,7 @@ class CCPPCalculator:
         Returns:
             CCPP score (0-1)
         """
+        
         if n_total == 0:
             return 0.0
         cf = 1.0
@@ -54,21 +55,23 @@ class CCPPCalculator:
                 cf = 1 - base_penalty 
         ccpp_score = (n_ml / n_total) * cf
         return round(ccpp_score, 4)
-    def get_purity_level(self, ccpp_score: float) -> str:
+    def get_cohesion_level(self, ccpp_score: float) -> str:
         """
-        Determines qualitative purity level from CCPP score.
+        Determines qualitative cohesion level from CCPP score.
         Args:
             ccpp_score: CCPP score (0-1)  
         Returns:
-            Purity level: "High", "Moderate", "Low", or "Very Low"
+            Cohesion level: "very_high","high","medium","low","very_low"
         """
-        if ccpp_score > 0.8:
-            return "High"
-        if ccpp_score >= 0.6:
-            return "Moderate"
+        if ccpp_score >= 0.8:
+            return "very_high"
+        if ccpp_score >= 0.5:
+            return "high"
         if ccpp_score >= 0.4:
-            return "Low"
-        return "Very Low"
+            return "medium"
+        if ccpp_score >= 0.3:
+            return "low"
+        return "very_low"
     
     def get_overall_quality(self, average_ccpp: float) -> str:
         """

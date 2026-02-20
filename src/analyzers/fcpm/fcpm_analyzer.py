@@ -65,12 +65,14 @@ class FCPMAnalyzer(BaseAnalyzer):
         }
         
         python_files = self.context.get_python_files()
+       
         results['summary']['total_files'] = len(python_files)
         
         scores = []
         all_messages = []
         
         for py_file in python_files:
+            
             tree = self.context.get_file_ast(py_file)
             source = self.context.get_file_source(py_file)
             
