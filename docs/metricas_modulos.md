@@ -300,13 +300,14 @@ Content-Type: application/json
 
 {
   "analyzers": ["ccpm", "scpm", "fcpm"],
-  "all_files": false,
   "pipeline_overrides": {
     "file_stages": {"path/to/file.py": ["data_collection"]},
     "excluded_files": ["tests/"]
   }
 }
 ```
+
+El análisis requiere al menos un archivo con etapas asignadas (detectadas o manuales).
 
 ### Respuesta Típica (CCPM)
 
@@ -395,7 +396,6 @@ Todas las métricas conceptuales utilizan `MLContentAnalyzer` para distinguir c�
 - [x] Actualizar documentación
 - [ ] Agregar tests unitarios para evaluadores
 - [ ] Documentar casos de uso de SCPM y FCPM
-
 
 
 

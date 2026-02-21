@@ -21,7 +21,7 @@ class AnalysisContext:
     - AST trees per file
     - Source code per file  
     - Metric results that can be reused
-    - File discovery (filtered based on all_files flag)
+    - File discovery (pipeline scope + manual overrides only)
     
     This prevents redundant parsing and computation across analyzers.
     """
@@ -31,7 +31,7 @@ class AnalysisContext:
         session_id: str, 
         local_path: str, 
         pipeline_metadata: Optional[Dict[str, Any]] = None,
-        all_files: bool = False
+        manual_override_applied: bool = False
     ):
         """
         Initialize AnalysisContext.
@@ -40,15 +40,14 @@ class AnalysisContext:
             session_id: Unique session identifier
             local_path: Path to extracted code
             pipeline_metadata: Optional pipeline detection results from PipelineAnalyzer
-            all_files: If True, analyze ALL Python files in project.
-                      If False (default), prefer ML pipeline files when available.
+            manual_override_applied: Whether request included manual pipeline overrides.
         """
         self.session_id = session_id
         self.local_path = local_path
         self._file_cache: Dict[str, FileAnalysisCache] = {}
         self._global_metrics: Dict[str, Any] = {}
         self._pipeline_metadata: Optional[Dict[str, Any]] = pipeline_metadata
-        self._all_files = all_files
+        self._manual_override_applied = manual_override_applied
         self._python_files_cache: Optional[List[str]] = None  # Cache for file discovery
     
     def get_file_ast(self, file_path: str) -> Optional[ast.Module]:
@@ -180,12 +179,12 @@ class AnalysisContext:
     
     def get_python_files(self) -> List[str]:
         """
-        Get Python files to analyze based on context configuration.
+        Get Python files to analyze from pipeline scope.
         
-        Behavior depends on all_files flag set during initialization:
-        - If all_files=True: Returns ALL filtered Python files
-        - If all_files=False: Returns ML pipeline files if available,
-          otherwise falls back to all filtered files
+        Scope is determined by pipeline metadata:
+        - auto-detected pipeline files
+        - manually assigned files via pipeline_overrides.file_stages
+        (only files with at least one stage assignment)
         
         This is the PRIMARY method analyzers should use.
         Results are cached for efficiency.
@@ -195,18 +194,8 @@ class AnalysisContext:
         """
         if self._python_files_cache is not None:
             return self._python_files_cache
-        
-        if self._all_files:
-            # Mode: Analyze ALL Python files
-            self._python_files_cache = self._get_filtered_all_python_files()
-        else:
-            # Mode: Prefer ML files, fallback to all if no ML detected
-            ml_files = self.get_all_ml_files()
-            if ml_files:
-                self._python_files_cache = ml_files
-            else:
-                self._python_files_cache = self._get_filtered_all_python_files()
-        
+
+        self._python_files_cache = self.get_all_ml_files()
         return self._python_files_cache
     
     def get_scan_mode(self) -> str:
@@ -216,27 +205,18 @@ class AnalysisContext:
         Useful for logging and reporting.
         
         Returns:
-            'all_files': Analyzing all Python files (all_files=True)
-            'ml_only': Analyzing only ML pipeline files
-            'all_files_fallback': Analyzing all files because no ML detected
+            'pipeline_scope': Using pipeline-detected scope
+            'manual_override_scope': Using manual pipeline overrides
+            'empty_scope': No files with stage assignments found
         """
-        if self._all_files:
-            return 'all_files'
-        
         ml_files = self.get_all_ml_files()
-        if ml_files:
-            return 'ml_only'
-        else:
-            return 'all_files_fallback'
-    
-    def is_analyzing_all_files(self) -> bool:
-        """
-        Check if context is configured to analyze all files.
-        
-        Returns:
-            True if all_files mode is enabled
-        """
-        return self._all_files
+        if not ml_files:
+            return 'empty_scope'
+
+        if self._manual_override_applied:
+            return 'manual_override_scope'
+
+        return 'pipeline_scope'
     
     def _get_filtered_all_python_files(self) -> List[str]:
         """
@@ -293,9 +273,9 @@ class AnalysisContext:
     
     def get_all_python_files(self) -> List[str]:
         """
-        Get list of ALL filtered Python files (ignores all_files flag).
+        Get list of ALL filtered Python files in project.
         
-        This is a lower-level method that always returns all files.
+        This is a lower-level method that always returns all project files.
         Most analyzers should use get_python_files() instead.
         
         Excludes:
@@ -341,6 +321,7 @@ class AnalysisContext:
             return {}
         
         detected_stages = self._pipeline_metadata.get("detected_stages", {})
+        file_stages = self._pipeline_metadata.get("file_stages", {})
         
         if stage:
             if stage in detected_stages:
@@ -349,6 +330,14 @@ class AnalysisContext:
                     for file_info in detected_stages[stage]
                 ]
                 return {stage: files}
+            # Fallback from file-centric metadata
+            fallback_files = [
+                file_path
+                for file_path, stages in file_stages.items()
+                if stage in stages
+            ]
+            if fallback_files:
+                return {stage: fallback_files}
             return {}
         
         result = {}
@@ -357,6 +346,14 @@ class AnalysisContext:
                 file_info["file"] 
                 for file_info in file_list
             ]
+        
+        # Add any stage present only in file_stages.
+        for file_path, stages in file_stages.items():
+            for stage_name in stages:
+                if stage_name not in result:
+                    result[stage_name] = []
+                if file_path not in result[stage_name]:
+                    result[stage_name].append(file_path)
         return result
     
     def get_all_ml_files(self) -> List[str]:
@@ -372,9 +369,15 @@ class AnalysisContext:
         
         ml_files = set()
         detected_stages = self._pipeline_metadata.get("detected_stages", {})
+        file_stages = self._pipeline_metadata.get("file_stages", {})
         
         for file_list in detected_stages.values():
             for file_info in file_list:
                 ml_files.add(file_info["file"])
+
+        # Fallback/union from file-centric metadata.
+        for file_path, stages in file_stages.items():
+            if stages:
+                ml_files.add(file_path)
         
-        return list(ml_files)
+        return sorted(ml_files)

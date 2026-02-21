@@ -37,7 +37,6 @@ def create_routes(app: Flask) -> Flask:
         Expects JSON body:
         {
           "analyzers": ["pylint", "radon_cc", "pipeline"],
-          "all_files": false,  // Optional: analyze all files vs ML-only (default: false)
           "pipeline_overrides": {
             "file_stages": {"path/to/file.py": ["data_collection"]},
             "excluded_files": ["tests/", "docs/"]

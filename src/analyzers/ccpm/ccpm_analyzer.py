@@ -77,8 +77,8 @@ class CCPMAnalyzer(BaseAnalyzer):
         Run CCPM analysis on Python files.
         
         The files to analyze are determined by the AnalysisContext configuration:
-        - If context.all_files=True: Analyzes ALL Python files
-        - If context.all_files=False: Prefers ML pipeline files, falls back to all files
+        - Uses pipeline-detected scope
+        - Includes manual stage assignments when provided
         
         Returns:
             AnalysisResult with CCPM score based on ML pipeline cohesion, 
