@@ -109,6 +109,11 @@ class AnalysisService:
         # Get pipeline metadata
         metadata = session.get_metadata()
         pipeline_metadata = metadata.get("auto_detected_pipeline")
+        if not isinstance(pipeline_metadata, dict):
+            raise ValidationError(
+                "Session pipeline metadata is missing or invalid.",
+                field="session_id"
+            )
         
         has_pipeline_overrides = bool(
             analysis_request.pipeline_overrides and (
@@ -135,9 +140,14 @@ class AnalysisService:
             pipeline_metadata=pipeline_metadata,
             manual_override_applied=has_pipeline_overrides
         )
+        pipeline_metadata = shared_context.get_pipeline_metadata() or pipeline_metadata
 
         scoped_files = shared_context.get_python_files()
-        if not scoped_files:
+        requires_scoped_files = any(
+            analyzer_type != "pipeline"
+            for analyzer_type in analysis_request.analyzers
+        )
+        if requires_scoped_files and not scoped_files:
             raise ValidationError(
                 "No files with valid pipeline stages were found. Assign at least one stage to one file before running analysis.",
                 field="pipeline_overrides.file_stages"

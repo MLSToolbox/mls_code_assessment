@@ -1,11 +1,11 @@
 import os
-import json
-from typing import Dict, List, Set, Any
+from typing import Any, Dict, List
 from collections import defaultdict
 from core.analysis_result import AnalysisResult
 from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.ccpp.ccpp_calculator import CCPPCalculator
 from analyzers.ccpp.ccpp_evaluator import CCPPEvaluator
+from analyzers.pipeline.pipeline_schema import get_pipeline_schema
 class CCPPAnalyzer(BaseAnalyzer):
     """
     Conceptual Cohesion of Pipeline Packages (CCPP) Analyzer.
@@ -31,19 +31,11 @@ class CCPPAnalyzer(BaseAnalyzer):
         return "ccpp"
     def __init__(self, session_id: str, local_path: str, context=None):
         super().__init__(session_id, local_path, context)
-        pipeline_stages_json_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'pipeline',
-            'pipeline_stages.json'
-        )
-        if os.path.exists(pipeline_stages_json_path):
-            with open(pipeline_stages_json_path, 'r') as f:
-                self.config = json.load(f)
-        else:
-            self.config = {"stages": {}}
-            
-        num_stages = len(self.config.get('stages', {}))
-        max_stages = num_stages if num_stages > 0 else 5
+        self.schema = get_pipeline_schema()
+        self.config = self.schema.raw_config
+
+        num_stages = len(self.schema.valid_stages)
+        max_stages = num_stages if num_stages > 0 else 1
         self.calculator = CCPPCalculator(etapas_max=max_stages)
         self.evaluator = CCPPEvaluator()
     def analyze(self) -> AnalysisResult:
@@ -70,7 +62,7 @@ class CCPPAnalyzer(BaseAnalyzer):
         return self._create_result(
             score=final_score,
             messages=messages_list,  
-            module_count=len(self.context.get_all_python_files()),
+            module_count=len(self.context.get_python_files()),
             details={
                 "summary": {
                     "total_packages_analyzed": len(packages),
@@ -102,9 +94,12 @@ class CCPPAnalyzer(BaseAnalyzer):
         ccpm_results = []
         for module_path in modules:
             ccpm_result = self.context.get_file_metric(module_path, 'ccpm')
-            if ccpm_result:
-                ccpm_result['file_path'] = module_path
-                ccpm_results.append(ccpm_result)
+            module_metric = dict(ccpm_result) if ccpm_result else {}
+            module_metric['file_path'] = module_path
+            module_metric.setdefault('stages_detected', [])
+            module_metric.setdefault('phases_detected', [])
+            module_metric.setdefault('cohesion_level', None)
+            ccpm_results.append(module_metric)
         aggregated = self.calculator.aggregate_package_metrics(ccpm_results)
         n_total = aggregated['n_total']
         n_ml = aggregated['n_ml']
@@ -133,7 +128,7 @@ class CCPPAnalyzer(BaseAnalyzer):
         A package is a directory containing Python files.
         """
         packages: Dict[str, List[str]] = defaultdict(list)
-        python_files = self.context.get_all_python_files()
+        python_files = self.context.get_python_files()
 
         for file_path in python_files:
             if file_path.endswith('__init__.py'):
@@ -143,7 +138,7 @@ class CCPPAnalyzer(BaseAnalyzer):
         return dict(packages)
     def _is_ccpm_data_available(self) -> bool:
         """Checks if any file has CCPM data in the context."""
-        for py_file in self.context.get_all_python_files():
+        for py_file in self.context.get_python_files():
             if self.context.has_file_metric(py_file, 'ccpm'):
                 return True
         return False
