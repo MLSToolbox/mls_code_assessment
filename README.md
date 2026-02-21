@@ -29,6 +29,15 @@ Ejecuta analizadores sobre sesión existente:
 
 Nota: el análisis requiere al menos un archivo con etapas asignadas (auto-detectadas o manuales).
 
+Excepción: si `analyzers` contiene solo `pipeline`, la ejecución puede continuar aunque el scope esté vacío (útil para inspeccionar un pipeline incompleto).
+
+### Fuente única de verdad (stages/phases)
+
+- La definición oficial de stages, phases y required stages vive en:
+  - `src/analyzers/pipeline/pipeline_stages.json`
+- Los overrides (`pipeline_overrides.file_stages`) se validan contra ese JSON.
+- `required_stages` también se toma de ese JSON para calcular `is_valid_pipeline` y `missing_stages`.
+
 **Analizadores disponibles:**
 - `pylint` - Calidad de código (PEP 8)
 - `radon_cc` - Complejidad ciclomática
@@ -70,10 +79,10 @@ src/
 - `base_analyzer.py` - Clase abstracta base para analizadores
 - `base_evaluator.py` - Clase base para evaluadores de reglas
 - `factory.py` - Factory pattern para crear analizadores
-- `pipeline/` - Analizador de pipeline ML (stages, overrides, config)
+- `pipeline/` - Analizador de pipeline ML (stages, overrides, schema central)
 - `ccpm/` - Conceptual Cohesion of Pipeline Modules (migrado)
 - `ml_content/` - Detección de contenido ML vs non-ML
-- Analizadores individuales: `pylint_analyzer.py`, `radon_cc_analyzer.py`, `scpm_analyzer.py`, `fcpm_analyzer.py`, `lccml_analyzer.py`
+- Analizadores individuales: `pylint_analyzer.py`, `radon_cc_analyzer.py`, `radon_mi_analyzer.py`, `file_structure_analyzer.py`
 
 **`core/`** - Componentes centrales reutilizables
 - `analysis_result.py` - Modelo de resultado de análisis
