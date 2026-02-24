@@ -10,7 +10,6 @@ def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
     """
     Identifies connected components (groups) and isolated nodes in a package graph 
     using Depth First Search (DFS).
-    
     Args:
         nodes: List of node names (strings) corresponding to indices 0..m-1
         adjacency: Dict where key is node index (int) and value is set of neighbor indices (Set[int])
@@ -23,9 +22,6 @@ def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
     m = len(nodes)
     visited = set()
     groups = []
-    
-    
-    
     for i in range(m):
         if i not in visited:
             # Check if it has any edges (connected component of size > 1)
@@ -112,3 +108,22 @@ def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
     
     return groups, isolated_nodes
 
+# def transverse_tree_to_get_packages_and_files(node,current_path="",dir_list=None):
+#     if node["type"]=="file" and node["name"].endswith(".py") and node["name"]!="__init__.py":
+#         return node["path"].replace("/","",1)
+#     packages_file_path=[]
+#     if "children" in node:
+#         for child in node["children"]:
+#             module=transverse_tree_to_get_packages_and_files(child,node["path"],dir_list)
+#             if isinstance(module,list):
+#                 packages_file_path.extend(module)
+#             else:
+#                 packages_file_path.append(module)
+#     if node["type"]=="directory" and node["type"]!="/":
+#         dir_list.append({
+#             "path":node["path"].replace("/","",1),
+#             "files":packages_file_path
+#         })
+#     return packages_file_path
+    
+    

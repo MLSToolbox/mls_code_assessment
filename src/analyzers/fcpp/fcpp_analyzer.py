@@ -244,7 +244,7 @@ class FCPPAnalyzer(BaseAnalyzer):
                         
                     connections_list.append({
                         'node_a': nodes[i],
-                        'node_b': nodes[j],
+                        'node_b':nodes[j],
                         'type': final_type,
                         'reason': final_reason
                     })

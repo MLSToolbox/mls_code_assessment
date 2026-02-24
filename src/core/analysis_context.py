@@ -273,7 +273,7 @@ class AnalysisContext:
         
         python_files = []
         
-        for root, dirs, files in os.walk(self.local_path):
+        for root, dirs, files in (self.local_path):
             # Filter out excluded directories in-place
             dirs[:] = [d for d in dirs if not any(
                 excl.rstrip('/') in d for excl in excluded_patterns
