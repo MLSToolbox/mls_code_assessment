@@ -1,6 +1,4 @@
 import ast
-import os
-import json
 from typing import Dict, List, Set
 
 from core.analysis_result import AnalysisResult
@@ -8,6 +6,7 @@ from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.ml_content import MLContentAnalyzer
 from analyzers.ccpm.nloc_calculator import NLOCCalculator
 from analyzers.ccpm.ccpm_evaluator import CCPMEvaluator
+from analyzers.pipeline.pipeline_schema import get_pipeline_schema
 from config.settings import settings
 
 
@@ -34,27 +33,9 @@ class CCPMAnalyzer(BaseAnalyzer):
     
     def __init__(self, session_id: str, local_path: str, context=None):
         super().__init__(session_id, local_path, context)
-        
-        pipeline_stages_json_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'pipeline',
-            'pipeline_stages.json'
-        )
-        
-        if os.path.exists(pipeline_stages_json_path):
-            with open(pipeline_stages_json_path, 'r') as f:
-                self.config = json.load(f)
-        else:
-            raise FileNotFoundError(
-                f"Pipeline stages config not found at {pipeline_stages_json_path}"
-            )
-
-        self.stage_to_phase = {}
-        for phase, stages in self.config.get('phases', {}).items():
-           
-            for stage in stages:
-                
-                self.stage_to_phase[stage] = phase
+        self.schema = get_pipeline_schema()
+        self.config = self.schema.raw_config
+        self.stage_to_phase = dict(self.schema.stage_to_phase)
         
         self.ml_content_analyzer = MLContentAnalyzer(
             session_id=session_id,
@@ -77,8 +58,8 @@ class CCPMAnalyzer(BaseAnalyzer):
         Run CCPM analysis on Python files.
         
         The files to analyze are determined by the AnalysisContext configuration:
-        - If context.all_files=True: Analyzes ALL Python files
-        - If context.all_files=False: Prefers ML pipeline files, falls back to all files
+        - Uses pipeline-detected scope
+        - Includes manual stage assignments when provided
         
         Returns:
             AnalysisResult with CCPM score based on ML pipeline cohesion, 
@@ -193,20 +174,13 @@ class CCPMAnalyzer(BaseAnalyzer):
         ml_content_only = not has_non_ml_content
         
         functions = self._extract_functions(tree)
-        # Classify file pattern: functions_only, classes_only, or mixed
-        pattern = self._classify_file_pattern(tree)
-        
         file_stages_from_pipeline = self._get_file_stages_from_pipeline(file_path)
         
         function_stages = {}
         is_script_file = '<module_script>' in functions
         
-        for func_name, func_node in functions.items():
-            if file_stages_from_pipeline:
-                stages = file_stages_from_pipeline
-            else:
-                stages = self._detect_stages(func_node, file_path)
-            
+        for func_name in functions.keys():
+            stages = file_stages_from_pipeline
             function_stages[func_name] = list(stages)
         
         all_stages = set()
@@ -232,7 +206,7 @@ class CCPMAnalyzer(BaseAnalyzer):
             'phases_detected': list(all_phases),
             'cohesion_level': cohesion_level,
             'function_stages': function_stages,
-            'source': 'pipeline_metadata' if file_stages_from_pipeline else 'heuristic',
+            'source': 'pipeline_metadata_strict',
             'ml_content_only': ml_content_only,
             'non_ml_keywords_found': non_ml_keywords,
             'nloc': nloc,
@@ -282,21 +256,14 @@ class CCPMAnalyzer(BaseAnalyzer):
         pipeline_metadata = self.context.get_pipeline_metadata()
         if not pipeline_metadata:
             return set()
-        
-        detected_stages = pipeline_metadata.get("detected_stages", {})
-        file_stages = set()
-        
-        # Normalize file_path (remove leading slash if present for comparison)
-        normalized_file_path = file_path.lstrip('/')
-        
-        for stage_name, file_list in detected_stages.items():
-            for file_info in file_list:
-                # Normalize the file path from metadata as well
-                metadata_file_path = file_info["file"].lstrip('/')
-                if metadata_file_path == normalized_file_path:
-                    file_stages.add(stage_name)
-        
-        return file_stages
+
+        file_stages = pipeline_metadata.get("file_stages", {})
+        stages = file_stages.get(file_path, [])
+        return {
+            stage
+            for stage in stages
+            if stage in self.schema.valid_stages
+        }
 
     def _classify_file_pattern(self, tree: ast.Module) -> str:
         """Classify a file as 'functions_only', 'classes_only' or 'mixed'."""

@@ -36,7 +36,15 @@ class FCPPAnalyzer(BaseAnalyzer):
         return "fcpp"
 
     def analyze(self) -> AnalysisResult:
-        tree_metadata=self.context.get_tree_metadata()
+        packages=self.context.get_packages_and_files()
+        if not packages:
+            return self._create_result(
+                score=0.0,
+                messages=[],
+                module_count=0,
+                details={},
+                group_key="by_package",
+            )
         results = {
             'packages': {},
             'summary': {
@@ -45,7 +53,40 @@ class FCPPAnalyzer(BaseAnalyzer):
                 'average_fcpp': 0.0
             }
         }
-        self._get_packages_fcpp_metrics(tree_metadata,results=results)
+        for package in packages :
+            graph_data=self._analyze_functional_connectivity(package["path"],package["modules"])
+            if graph_data["valid"]:
+                m=graph_data["n_nodes"]
+                connections = graph_data['connections_count'] 
+                total_pairs = m * (m - 1)
+                fcpp_value = (2.0 * connections) / total_pairs if total_pairs > 0 else 0.0
+                results["packages"][package["path"]]={
+                    **graph_data,
+                    'fcpp': round(fcpp_value, 3),
+                }
+                if fcpp_value >= 0.8: 
+                    results["packages"][package["path"]]["cohesion_level"] = "very_high"
+                    results['summary']['very_high'] += 1 
+                elif fcpp_value >= 0.6: 
+                    results["packages"][package["path"]]["cohesion_level"] = "high"
+                    results['summary']['high'] += 1
+                elif fcpp_value >= 0.4: 
+                    results["packages"][package["path"]]["cohesion_level"] = "medium"
+                    results['summary']['medium'] += 1
+                elif fcpp_value >= 0.2: 
+                    results["packages"][package["path"]]["cohesion_level"] = "low"
+                    results['summary']['low'] += 1
+                else: 
+                    results["packages"][package["path"]]["cohesion_level"] = "very_low"
+                    results['summary']['very_low'] += 1
+                results["summary"]["total_packages"]+=1
+            else:
+                results["packages"][package["path"]]={
+                    **graph_data,
+                    "fcpp":None,
+                    "cohesion_level":"not_applicable",
+                }
+                results["summary"]["total_packages"]+=1
         if results["packages"]:
             results['summary']['average_fcpp'] = round(sum([results["packages"][package_path]["fcpp"] if results["packages"][package_path]["valid"] else 0  for package_path in results["packages"]]) / len(results["packages"]),3)
             results["packages"]=dict(reversed(list(results["packages"].items())))
@@ -58,71 +99,9 @@ class FCPPAnalyzer(BaseAnalyzer):
             messages=messages,
             module_count= len(results["packages"]),
             details=results,
+            
             group_key='by_package'
         )
-    def _get_packages_fcpp_metrics(self,node,current_path="",results=None):
-        """
-        Recursively traverses the AST to find packages and compute FCPP metrics.
-        
-        Args:
-            node: Current node in the AST
-            current_path: Path to the current node
-            results: Dictionary to store the results
-        
-        Returns:
-            List of package file paths
-        """
-        if node["type"]=="file"  and node["name"].endswith(".py") and node["name"]!="__init__.py":
-            return node["path"].replace("/","",1)
-        packages_file_path=[]  
-        if "children" in node:
-            for child in node["children"]:
-                module=self._get_packages_fcpp_metrics(child,node["path"],results)
-                if isinstance(module,list):
-                    packages_file_path.extend(module)
-                else:
-                    packages_file_path.append(module)
-                
-        if node["path"] !="/" and node["type"]=="directory":
-            graph_data=self._analyze_functional_connectivity(node["path"],packages_file_path)
-            if graph_data["valid"] :
-                m = graph_data['n_nodes']
-                connections = graph_data['connections_count'] 
-                total_pairs = m * (m - 1)
-                fcpp_value = (2.0 * connections) / total_pairs if total_pairs > 0 else 0.0
-                package_result = {
-                    **graph_data,
-                    'fcpp': round(fcpp_value, 3),
-                }
-                results["packages"][node["path"].replace("/","",1)]=package_result
-                if fcpp_value >= 0.8: 
-                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "very_high"
-                    results['summary']['very_high'] += 1 
-                elif fcpp_value >= 0.6: 
-                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "high"
-                    results['summary']['high'] += 1
-                elif fcpp_value >= 0.4: 
-                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "medium"
-                    results['summary']['medium'] += 1
-                elif fcpp_value >= 0.2: 
-                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "low"
-                    results['summary']['low'] += 1
-                else: 
-                    results["packages"][node["path"].replace("/","",1)]["cohesion_level"] = "very_low"
-                    results['summary']['very_low'] += 1
-                results["summary"]["total_packages"]+=1
-            else:
-                package_result={
-                    **graph_data,
-                    "fcpp":None,
-                    "cohesion_level":"not_applicable",
-                    "n_groups":0,
-                    "groups":[]
-                }
-                results["packages"][node["path"].replace("/","",1)]=package_result
-                results["summary"]["total_packages"]+=1
-        return packages_file_path
-
     def _analyze_functional_connectivity(self, package_path: str,nodes:List[str]) -> Dict[str, Any]:
         """
         Builds the functional call graph for the package and computes connectivity.
@@ -132,49 +111,54 @@ class FCPPAnalyzer(BaseAnalyzer):
             return {'valid': False, 'n_nodes': m, 'nodes': nodes,'connections_count':0,'n_groups':0,'groups':[],"isolated_nodes":[],"connections":[]}
 
         node_to_idx = {n: i for i, n in enumerate(nodes)}
+        module_to_idx = {}
+        for i, n in enumerate(nodes):
+            name = os.path.basename(n)
+            if name == "__init__.py":
+                name = os.path.basename(os.path.dirname(n))
+            else:
+                name = os.path.splitext(name)[0]
+            module_to_idx[name] = i
         file_to_node_idx = {}
-        definitions = defaultdict(list) 
+        definitions = defaultdict(list)
         for idx, node_path in enumerate(nodes):
-            
             file_to_node_idx[node_path] = idx
-            files_to_scan = [node_path]
-                            
-            for f_path in files_to_scan:
-                tree = self.context.get_file_ast(f_path)
-                if tree:
-                    for node in ast.walk(tree):
-                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                            definitions[node.name].append(idx)
+            features = self.context.get_file_features(node_path)
+            if features:
+                for def_name in features.definitions:
+                    definitions[def_name].append(idx)
+
         adj = defaultdict(lambda: defaultdict(set))
         for f_path, owner_idx in file_to_node_idx.items():
-            tree = self.context.get_file_ast(f_path)
-            if not tree: continue
+            features = self.context.get_file_features(f_path)
+            if not features: continue
             
             imported_names = {}
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.Import, ast.ImportFrom)):
-                    targets = self._resolve_import(node, f_path, package_path, nodes, node_to_idx, definitions)
-                    for alias, target_idx in targets.items():
-                        imported_names[alias] = target_idx
+            # 1. Process Imports
+            for node in features.imports:
+                targets = self._resolve_import(node, f_path, package_path, nodes, node_to_idx, definitions, module_to_idx)
+                for alias, target_idx in targets.items():
+                    imported_names[alias] = target_idx
             
-            for node in ast.walk(tree):
+            # 2. Process Calls and Name usage
+            potential_uses = features.calls + features.name_nodes
+            for node in potential_uses:
                 used_name = None
                 if isinstance(node, ast.Call):
                     if isinstance(node.func, ast.Name):
                         used_name = node.func.id
                     elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
-                         if node.func.value.id in imported_names:
-                             used_name = node.func.value.id
+                        if node.func.value.id in imported_names:
+                            used_name = node.func.value.id
                 elif isinstance(node, ast.Name):
                     if isinstance(node.ctx, ast.Load):
                         used_name = node.id
-
+                
                 if used_name and used_name in imported_names:
-                     target = imported_names[used_name]
-                     if target != owner_idx:
-                         detail = f"{used_name} (in {f_path})"
-                         adj[owner_idx][target].add(detail)
-        
+                    target = imported_names[used_name]
+                    if target != owner_idx:
+                        detail = f"{used_name} (in {f_path})"
+                        adj[owner_idx][target].add(detail)
         R = [[False] * m for _ in range(m)]
         for u in range(m):
             R[u][u] = True
@@ -269,37 +253,28 @@ class FCPPAnalyzer(BaseAnalyzer):
                 messages.append(msg)
         return messages
     def _resolve_import(self, node: ast.AST, current_file: str, package_root: str, 
-                       nodes: List[str], node_to_idx: Dict[str, int], definitions: Dict[str, List[int]]) -> Dict[str, int]:
+                       nodes: List[str], node_to_idx: Dict[str, int], 
+                       definitions: Dict[str, List[int]], module_to_idx: Dict[str, int]) -> Dict[str, int]:
         """
         Resolves imported names to sibling Root Nodes using heuristic matching and definition lookup.
         """
         resolved = {}
         module = node.module if hasattr(node, 'module') else None
         names = node.names
-        level = node.level if hasattr(node, 'level') else 0
         
-        def match_node(name: str) -> Optional[int]:
-            for path, idx in node_to_idx.items():
-                base = os.path.basename(path)
-                if os.path.isfile(path):
-                    if base.replace('.py', '') == name: return idx
-                else:
-                    if base == name: return idx
-            return None
-
         for alias in names:
             target = alias.name
             as_name = alias.asname or alias.name
             found_idx = None
             if module:
                 parts = module.split('.')
-                found_idx = match_node(parts[-1])
+                found_idx = module_to_idx.get(parts[-1])
                 if found_idx is None and len(parts) > 0:
-                    found_idx = match_node(parts[0])
+                    found_idx = module_to_idx.get(parts[0])
             if found_idx is None:
-                found_idx = match_node(target)
+                found_idx = module_to_idx.get(target)
                 if found_idx is None:
-                    found_idx = match_node(target.split('.')[0])
+                    found_idx = module_to_idx.get(target.split('.')[0])
             if found_idx is None:
                 if target in definitions:
                     candidates = definitions[target]

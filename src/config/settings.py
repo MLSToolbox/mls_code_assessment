@@ -27,15 +27,6 @@ class Settings:
         "fcpp"
     }
     
-    # Valid pipeline stages
-    VALID_PIPELINE_STAGES: Set[str] = {
-        "data_collection",
-        "data_cleaning",
-        "feature_engineering",
-        "model_training",
-        "model_evaluation"
-    }
-    
     # Session settings
     SESSION_BASE_PATH: str = os.getenv('SESSION_BASE_PATH', '/tmp/mls_sessions')
     SESSION_TTL_MINUTES: int = int(os.getenv('SESSION_TTL_MINUTES') or '60')
@@ -94,12 +85,4 @@ AnalyzerType = Literal[
     "ccpp",
     "scpp",
     "fcpp"
-]
-
-PipelineStage = Literal[
-    "data_collection",
-    "data_cleaning",
-    "feature_engineering",
-    "model_training",
-    "model_evaluation"
 ]

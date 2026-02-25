@@ -1,4 +1,9 @@
 {
+  "required_stages": [
+    "data_collection",
+    "model_training",
+    "model_evaluation"
+  ],
   "phases": {
     "data_engineering": [
       "data_collection",

@@ -8,7 +8,7 @@ from core.tree_generator import TreeGenerator
 from core.analysis_context import AnalysisContext
 from analyzers.pipeline.pipeline_overrides import AnalysisRequest
 from core.analysis_result import AnalysisResult
-from core.exceptions import SessionNotFoundError
+from core.exceptions import SessionNotFoundError, ValidationError
 from metrics import get_metric_metadata
 import config.settings as config
 
@@ -110,10 +110,22 @@ class AnalysisService:
         pipeline_metadata = metadata.get("auto_detected_pipeline")
         tree_metadata = metadata.get("tree_structure")
 
+        if not isinstance(pipeline_metadata, dict):
+            raise ValidationError(
+                "Session pipeline metadata is missing or invalid.",
+                field="session_id"
+            )
         
+        has_pipeline_overrides = bool(
+            analysis_request.pipeline_overrides and (
+                analysis_request.pipeline_overrides.file_stages or
+                analysis_request.pipeline_overrides.excluded_files
+            )
+        )
+
         # Apply pipeline overrides FIRST if they exist
         # This ensures all analyzers use the updated metadata
-        if analysis_request.pipeline_overrides:
+        if has_pipeline_overrides:
             pipeline_analyzer = AnalyzerFactory.create_analyzer(
                 "pipeline", session_id, session.local_path, None
             )
@@ -128,8 +140,20 @@ class AnalysisService:
             session.local_path,
             pipeline_metadata=pipeline_metadata,
             tree_metadata=tree_metadata,
-            all_files=analysis_request.all_files
+            manual_override_applied=has_pipeline_overrides
         )
+        pipeline_metadata = shared_context.get_pipeline_metadata() or pipeline_metadata
+
+        scoped_files = shared_context.get_python_files()
+        requires_scoped_files = any(
+            analyzer_type != "pipeline"
+            for analyzer_type in analysis_request.analyzers
+        )
+        if requires_scoped_files and not scoped_files:
+            raise ValidationError(
+                "No files with valid pipeline stages were found. Assign at least one stage to one file before running analysis.",
+                field="pipeline_overrides.file_stages"
+            )
         
         results = {}
         

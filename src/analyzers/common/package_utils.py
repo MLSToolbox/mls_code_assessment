@@ -2,8 +2,9 @@
 """
 Package Detection Utilities.
 """
+import ast
 import os
-from typing import List
+from typing import List, Set, Dict, Any, Optional
 
 
 def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
@@ -108,22 +109,91 @@ def find_connected_groups(nodes: List[str], adjacency: dict) -> tuple:
     
     return groups, isolated_nodes
 
-# def transverse_tree_to_get_packages_and_files(node,current_path="",dir_list=None):
-#     if node["type"]=="file" and node["name"].endswith(".py") and node["name"]!="__init__.py":
-#         return node["path"].replace("/","",1)
-#     packages_file_path=[]
-#     if "children" in node:
-#         for child in node["children"]:
-#             module=transverse_tree_to_get_packages_and_files(child,node["path"],dir_list)
-#             if isinstance(module,list):
-#                 packages_file_path.extend(module)
-#             else:
-#                 packages_file_path.append(module)
-#     if node["type"]=="directory" and node["type"]!="/":
-#         dir_list.append({
-#             "path":node["path"].replace("/","",1),
-#             "files":packages_file_path
-#         })
-#     return packages_file_path
+def transverse_tree_to_get_packages_and_files(node, dir_list=None):
+    """
+    Traverses the directory tree to identify Python packages and their modules.
     
+    Args:
+        node: Current node in the tree (directory or file)
+        dir_list: List of dictionaries to collect package metadata
+        
+    Returns:
+        List[str]: A list of relative paths for Python modules found in the current branch
+    """
+    n_type = node.get("type")
+    n_path = node.get("path", "").lstrip("/")
     
+    # Case: Python module (file)
+    if n_type == "file":
+        n_name = node.get("name", "")
+        if n_name.endswith(".py") and n_name != "__init__.py":
+            # Return list with single module path
+            return [n_path]
+        return []
+
+    # Case: Directory (potential package)
+    packages_file_path = []
+    for child in node.get("children", []):
+        # Extend results from recursive calls (always returns a list now)
+        packages_file_path.extend(transverse_tree_to_get_packages_and_files(child, dir_list))
+
+    # Identify as package if it's a directory (excluding root) and contains modules
+    if n_type == "directory" and n_path:
+        dir_list.append({
+            "path": n_path,
+            "modules": packages_file_path
+        })
+        
+    return packages_file_path
+
+def extract_file_features(tree: ast.AST) -> Dict[str, Any]:
+    """
+    Extracts relevant features from an AST in a single pass.
+    Avoids multiple ast.walk calls across different analyzers.
+    """
+    from .ast_utils import get_attribute_path
+    from .variable_detection import is_likely_global_variable
+    
+    results = {
+        'definitions': set(),
+        'imports': [],
+        'calls': [],
+        'attributes': set(),
+        'names': set(),
+        'name_nodes': [],
+        'constants': set(),
+        'files_accessed': set()
+    }
+
+    if not tree:
+        return results
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute):
+            attr_path = get_attribute_path(node)
+            if attr_path and attr_path.startswith("self."):
+                results['attributes'].add(attr_path)
+        
+        elif isinstance(node, ast.Name):
+            if is_likely_global_variable(node.id):
+                results['names'].add(node.id)
+            results['name_nodes'].append(node)
+            
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            val = node.value
+            if is_likely_global_variable(val):
+                results['constants'].add(val)
+            # Heuristic for files
+            if any(ext in val.lower() for ext in ['.csv', '.json', '.parquet', '.xlsx', '.pkl', '.h5', '.pt', '.yaml', '.yml', '.npy']):
+                results['files_accessed'].add(val)
+                
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            results['definitions'].add(node.name)
+            
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            results['imports'].append(node)
+            
+        elif isinstance(node, ast.Call):
+            results['calls'].append(node)
+
+    return results

@@ -42,7 +42,6 @@ class CCPPCalculator:
         Returns:
             CCPP score (0-1)
         """
-        
         if n_total == 0:
             return 0.0
         cf = 1.0
@@ -55,22 +54,75 @@ class CCPPCalculator:
                 cf = 1 - base_penalty 
         ccpp_score = (n_ml / n_total) * cf
         return round(ccpp_score, 4)
-    def get_cohesion_level(self, ccpp_score: float) -> str:
+    def get_cohesion_level(self, package_metrics: Dict[str, Any]) -> str:
         """
-        Determines qualitative cohesion level from CCPP score.
+        Determines qualitative cohesion level based on package metrics and rules from ccpp_rules.json.
+        
         Args:
-            ccpp_score: CCPP score (0-1)  
+            package_metrics: Dictionary containing package analysis results.
+            
         Returns:
-            Cohesion level: "very_high","high","medium","low","very_low"
+            Cohesion level: "very_high", "high", "medium", "low", "very_low"
         """
+        phases_detected = set(package_metrics.get('phases_detected', []))
+        number_of_phases = len(phases_detected)
+        number_of_stages = package_metrics.get('unique_stages_found', 0)
+        ml_modules = package_metrics.get('ml_modules', 0)
+        total_modules = package_metrics.get('total_modules', 1)
+        ml_ratio = ml_modules / total_modules if total_modules > 0 else 0
+        ccpp_score = package_metrics.get('ccpp_score', 0.0)
+        
+        # Calculate average elements per stage (used in some rules)
+        average_elems_per_stage = 0
+        if number_of_stages > 0:
+            modules = package_metrics.get('modules', [])
+            total_stage_usage = sum(len(m.get('stages', [])) for m in modules)
+            average_elems_per_stage = total_stage_usage / number_of_stages
+
+        # Rules Translation from ccpp_rules.json (IDs 5-12)
+        
+        # Rule 12: Pure single stage (Very High)
+        if number_of_phases == 1 and number_of_stages == 1 and ml_ratio >= 1:
+            return "very_high"
+            
+        # Rule 10: Focused phase, multiple stages (High)
+        if number_of_phases == 1 and number_of_stages > 1 and ml_ratio >= 1:
+            return "high"
+            
+        # Rule 7: Mixed phases, but organized (High)
+        if number_of_phases > 1 and ml_ratio >= 1 and average_elems_per_stage == 1:
+            return "high"
+            
+        # Rule 11: Focused stage but noisy (Medium)
+        if number_of_phases == 1 and number_of_stages == 1 and ml_ratio < 1:
+            return "medium"
+            
+        # Rule 9: Focused phase but noisy (Medium)
+        if number_of_phases == 1 and number_of_stages > 1 and ml_ratio < 1:
+            return "medium"
+            
+        # Rule 8: Mixed phases, split stages (Medium)
+        if number_of_phases > 1 and ml_ratio >= 1 and average_elems_per_stage > 1:
+            return "medium"
+            
+        # Rule 6: Mixed phases, noisy, organized stages (Low)
+        if number_of_phases > 1 and ml_ratio < 1 and average_elems_per_stage == 1:
+            return "low"
+            
+        # Rule 5: Mixed phases, noisy, split stages (Very Low)
+        if number_of_phases > 1 and ml_ratio < 1 and average_elems_per_stage > 1:
+            return "very_low"
+            
+        # Fallback to score for edge cases (Rules 1-4 and others)
         if ccpp_score >= 0.8:
             return "very_high"
-        if ccpp_score >= 0.5:
+        if ccpp_score >= 0.6:
             return "high"
         if ccpp_score >= 0.4:
             return "medium"
-        if ccpp_score >= 0.3:
+        if ccpp_score >= 0.2:
             return "low"
+            
         return "very_low"
     
     def get_overall_quality(self, average_ccpp: float) -> str:

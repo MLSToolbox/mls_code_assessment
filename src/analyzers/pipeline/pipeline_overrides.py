@@ -1,7 +1,8 @@
 from typing import Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from config.settings import settings
+from analyzers.pipeline.pipeline_schema import get_pipeline_schema
 
 
 class PipelineOverrides(BaseModel):
@@ -19,12 +20,13 @@ class PipelineOverrides(BaseModel):
     @classmethod
     def validate_stages(cls, v: Dict[str, List[str]]) -> Dict[str, List[str]]:
         """Validate that all stages are valid."""
+        valid_stages = get_pipeline_schema().valid_stages
         for filepath, stages in v.items():
             for stage in stages:
-                if stage not in settings.VALID_PIPELINE_STAGES:
+                if stage not in valid_stages:
                     raise ValueError(
                         f"Invalid stage '{stage}' for file '{filepath}'. "
-                        f"Valid stages: {', '.join(sorted(settings.VALID_PIPELINE_STAGES))}"
+                        f"Valid stages: {', '.join(sorted(valid_stages))}"
                     )
         return v
 
@@ -36,8 +38,10 @@ class AnalysisRequest(BaseModel):
     Attributes:
         analyzers: List of analyzer types to execute
         pipeline_overrides: Optional pipeline overrides
-        all_files: Whether to analyze all files or only ML-related files
     """
+    # Reject unknown fields in analyze payload
+    model_config = ConfigDict(extra='forbid')
+
     analyzers: List[str] = Field(
         ..., 
         min_length=1,
@@ -46,10 +50,6 @@ class AnalysisRequest(BaseModel):
     pipeline_overrides: Optional[PipelineOverrides] = Field(
         None,
         description="Optional overrides for pipeline detection"
-    )
-    all_files: bool = Field(
-        False,
-        description="Analyze all files (True) or only ML-related files (False)"
     )
     
     @field_validator('analyzers')

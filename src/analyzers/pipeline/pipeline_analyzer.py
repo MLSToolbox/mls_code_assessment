@@ -1,44 +1,27 @@
 import ast
-import os
 import json
-from typing import Dict, List, Optional, Tuple, Set
+import os
+from typing import Dict, List, Optional, Tuple, Set, Any
 from collections import defaultdict
 
 from core.analysis_result import AnalysisResult
 from analyzers.pipeline.pipeline_overrides import PipelineOverrides
 from analyzers.base_analyzer import BaseAnalyzer
+from analyzers.pipeline.pipeline_schema import PipelineSchema, get_pipeline_schema
 
 
 class PipelineAnalyzer(BaseAnalyzer):
     
     def __init__(self, session_id: str, local_path: str, context=None, config_path: Optional[str] = None):
         super().__init__(session_id, local_path, context)
-        
-        # Required stages for a valid pipeline
-        self.required_stages = {
-            "data_collection",
-            "model_training",
-            "model_evaluation"
-        }
-        
-        # Load configuration
-        if config_path and os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                self.config = json.load(f)
-        else:
-            # Default configuration
-            config_file = os.path.join(
-                os.path.dirname(__file__), 
-                "pipeline_stages.json"
-            )
-            if os.path.exists(config_file):
-                with open(config_file, 'r') as f:
-                    self.config = json.load(f)
 
-            else:
-                
-                
-                self.config = self._default_config()
+        self.schema = (
+            PipelineSchema.from_file(config_path)
+            if config_path
+            else get_pipeline_schema()
+        )
+        self.config = self.schema.raw_config
+        self.required_stages = set(self.schema.required_stages)
     
     @property
     def analyzer_id(self) -> str:
@@ -59,92 +42,55 @@ class PipelineAnalyzer(BaseAnalyzer):
         Returns:
             Modified pipeline structure
         """
-        file_stages = overrides.file_stages
-        excluded_files = overrides.excluded_files
-        
-        # Copy original structure
-        modified = {
-            "is_valid_pipeline": auto_detected["is_valid_pipeline"],
-            "detected_stages": {},
-            "missing_stages": auto_detected["missing_stages"].copy(),
-            "files_analyzed": auto_detected["files_analyzed"]
-        }
-        
-        # Process excluded files
-        excluded_set = set()
-        for pattern in excluded_files:
-            excluded_set.add(pattern)
-        
-        # Apply file exclusions and manual stage assignments
-        for stage, file_list in auto_detected["detected_stages"].items():
-            modified["detected_stages"][stage] = []
-            
-            for file_info in file_list:
-                filepath = file_info["file"]
-                
-                # Check if file should be excluded
-                if self._is_excluded(filepath, list(excluded_set)):
-                    continue
-                
-                # Check if file has manual override
-                if filepath in file_stages:
-                    # Only include if this stage is in manual assignment
-                    if stage in file_stages[filepath]:
-                        modified["detected_stages"][stage].append({
-                            "file": filepath,
-                            "evidences": [
-                                {
-                                    "method": "manual",
-                                    "value": "user_override"
-                                }
-                            ]
-                        })
-                else:
-                    # Keep auto-detected
-                    modified["detected_stages"][stage].append(file_info)
-        
-        # Add manually assigned stages not in auto-detected
-        for filepath, stages in file_stages.items():
-            if self._is_excluded(filepath, list(excluded_set)):
+        manual_file_stages = overrides.file_stages
+        excluded_patterns = list(set(overrides.excluded_files))
+
+        base_detected_stages = auto_detected.get("detected_stages", {})
+        base_file_stages = auto_detected.get("file_stages")
+        if not isinstance(base_file_stages, dict):
+            # Backward compatibility for sessions created before file_stages existed.
+            base_file_stages = self._build_file_stages(
+                detected_stages=base_detected_stages,
+                all_python_files=self._get_python_files()
+            )
+
+        modified_file_stages: Dict[str, List[str]] = {}
+        for filepath, stages in base_file_stages.items():
+            normalized = self._normalize_file_path(filepath)
+            if not normalized:
                 continue
-            
-            for stage in stages:
-                # Initialize stage if not exists
-                if stage not in modified["detected_stages"]:
-                    modified["detected_stages"][stage] = []
-                
-                # Check if file already exists in this stage
-                exists = any(
-                    f["file"] == filepath 
-                    for f in modified["detected_stages"][stage]
-                )
-                
-                if not exists:
-                    modified["detected_stages"][stage].append({
-                        "file": filepath,
-                        "evidences": [
-                            {
-                                "method": "manual",
-                                "value": "user_override"
-                            }
-                        ]
-                    })
-        
-        # Recalculate missing stages
-        detected_stage_names = set(modified["detected_stages"].keys())
-        modified["missing_stages"] = list(
-            self.required_stages - detected_stage_names
+            modified_file_stages[normalized] = list(dict.fromkeys(stages))
+
+        # Exclude files from the baseline map.
+        for filepath in list(modified_file_stages.keys()):
+            if self._is_excluded(filepath, excluded_patterns):
+                modified_file_stages.pop(filepath, None)
+
+        # Apply manual overrides (including empty list to explicitly clear a file assignment).
+        manual_files = set()
+        for filepath, stages in manual_file_stages.items():
+            normalized = self._normalize_file_path(filepath)
+            if not normalized:
+                continue
+            if self._is_excluded(normalized, excluded_patterns):
+                continue
+            manual_files.add(normalized)
+            modified_file_stages[normalized] = list(dict.fromkeys(stages))
+
+        modified_detected_stages = self._build_detected_stages_from_file_stages(
+            file_stages=modified_file_stages,
+            base_detected_stages=base_detected_stages,
+            manual_files=manual_files
         )
-        
-        # Recalculate validity
-        modified["is_valid_pipeline"] = len(modified["missing_stages"]) == 0
-        
-        # Update file count (exclude excluded files)
-        modified["files_analyzed"] = sum(
-            len(files) for files in modified["detected_stages"].values()
-        )
-        
-        return modified
+
+        missing_stages = self._get_missing_stages(modified_detected_stages)
+        return {
+            "is_valid_pipeline": len(missing_stages) == 0,
+            "detected_stages": modified_detected_stages,
+            "file_stages": dict(sorted(modified_file_stages.items())),
+            "missing_stages": missing_stages,
+            "files_analyzed": len(modified_file_stages)
+        }
     
     def _is_excluded(self, filepath: str, patterns: List[str]) -> bool:
         """
@@ -160,15 +106,31 @@ class PipelineAnalyzer(BaseAnalyzer):
             True if filepath should be excluded
         """
         for pattern in patterns:
+            normalized_pattern = self._normalize_file_path(pattern.rstrip('/')) if pattern.endswith('/') else self._normalize_file_path(pattern)
+            if not normalized_pattern:
+                continue
             # Pattern ending with / means directory
             if pattern.endswith('/'):
                 # Check if path starts with pattern or contains it as directory
-                if filepath.startswith(pattern) or f"/{pattern}" in filepath:
+                if (
+                    filepath == normalized_pattern
+                    or filepath.startswith(f"{normalized_pattern}/")
+                    or f"/{normalized_pattern}/" in filepath
+                ):
                     return True
             # Exact substring match for files
-            elif pattern in filepath:
+            elif normalized_pattern in filepath:
                 return True
         return False
+
+    def _normalize_file_path(self, file_path: str) -> str:
+        if not isinstance(file_path, str) or not file_path:
+            return ""
+        normalized = file_path.replace("\\", "/")
+        normalized = os.path.normpath(normalized).replace("\\", "/")
+        if normalized in (".", ""):
+            return ""
+        return normalized.lstrip("/")
     
     def analyze(self) -> AnalysisResult:
         """
@@ -177,22 +139,23 @@ class PipelineAnalyzer(BaseAnalyzer):
         Returns:
             AnalysisResult with pipeline detection details
         """
-        is_pipeline, stage_files = self._detect_pipeline()
-        
+        _, stage_files = self._detect_pipeline()
         detected_stages = self._format_stages(stage_files)
-        missing_stages = self._get_missing_stages(stage_files)
-        
-        all_files = self._get_python_files()
+        python_files = self._get_python_files()
+        file_stages = self._build_file_stages(detected_stages, python_files)
+        missing_stages = self._get_missing_stages(detected_stages)
+        is_pipeline = len(missing_stages) == 0
         
         return self._create_result(
             score=10.0 if is_pipeline else 0.0,
             messages={},
-            module_count=len(all_files),
+            module_count=len(python_files),
             details={
                 "is_valid_pipeline": is_pipeline,
                 "detected_stages": detected_stages,
+                "file_stages": file_stages,
                 "missing_stages": missing_stages,
-                "files_analyzed": len(all_files)
+                "files_analyzed": len(python_files)
             }
         )
     
@@ -215,18 +178,18 @@ class PipelineAnalyzer(BaseAnalyzer):
             "session_id": self.session_id,
             "is_valid_pipeline": result.details["is_valid_pipeline"],
             "detected_stages": result.details["detected_stages"],
+            "file_stages": result.details.get("file_stages", {}),
             "missing_stages": result.details["missing_stages"],
             "files_analyzed": result.details["files_analyzed"],
             "score": result.score,
             "summary": {
                 "total_stages_detected": len(result.details["detected_stages"]),
-                "required_stages": list(self.required_stages),
+                "required_stages": sorted(self.required_stages),
                 "pipeline_status": "valid" if result.details["is_valid_pipeline"] else "incomplete"
             }
         }
         
         # Convert to JSON bytes
-        import json
         return json.dumps(report, indent=2).encode('utf-8')
     
     def _detect_pipeline(self) -> Tuple[bool, Dict[str, List[Tuple[str, str, str]]]]:
@@ -307,7 +270,7 @@ class PipelineAnalyzer(BaseAnalyzer):
     def _format_stages(self, stage_files: Dict[str, List[Tuple]]) -> Dict:
         """
         Format stage detection results for API response.
-        Returns only the file with most evidences per stage.
+        Returns all files detected for each stage, sorted by confidence.
         
         Args:
             stage_files: Raw stage detection results
@@ -315,11 +278,11 @@ class PipelineAnalyzer(BaseAnalyzer):
         Returns:
             Formatted dictionary suitable for API response
         """
-        formatted = {}
+        formatted: Dict[str, List[Dict[str, Any]]] = {}
         
         for stage, files in stage_files.items():
             # Group evidences by file
-            file_evidences = defaultdict(list)
+            file_evidences: Dict[str, List[Dict[str, str]]] = defaultdict(list)
             
             for filepath, method, value in files:
                 file_evidences[filepath].append({
@@ -327,35 +290,129 @@ class PipelineAnalyzer(BaseAnalyzer):
                     "value": value
                 })
             
-            # Select only the file with most evidences
             if file_evidences:
-                best_file = max(
+                # Higher evidence count first, then filepath for deterministic output.
+                sorted_files = sorted(
                     file_evidences.items(),
-                    key=lambda x: len(x[1])
+                    key=lambda item: (-len(item[1]), item[0])
                 )
-                
                 formatted[stage] = [
                     {
-                        "file": best_file[0],
-                        "evidences": best_file[1]
+                        "file": filepath,
+                        "evidences": evidences
                     }
+                    for filepath, evidences in sorted_files
                 ]
         
-        return formatted
+        return dict(sorted(formatted.items()))
     
-    def _get_missing_stages(self, stage_files: Dict) -> List[str]:
+    def _get_missing_stages(self, detected_stages: Dict[str, List[Dict[str, Any]]]) -> List[str]:
         """
-        Get list of required stages that are missing.
+        Get list of required stages that are missing (stage absent or empty list).
         
         Args:
-            stage_files: Detected stage files
+            detected_stages: Stage-centric detection structure
             
         Returns:
             List of missing stage names
         """
-        detected_stages = set(stage_files.keys())
-        missing = self.required_stages - detected_stages
-        return list(missing)
+        present_required_stages = {
+            stage
+            for stage, files in detected_stages.items()
+            if stage in self.required_stages and len(files) > 0
+        }
+        missing = self.required_stages - present_required_stages
+        return sorted(missing)
+
+    def _build_file_stages(
+        self,
+        detected_stages: Dict[str, List[Dict[str, Any]]],
+        all_python_files: Optional[List[str]] = None
+    ) -> Dict[str, List[str]]:
+        """
+        Build file-centric stage map, optionally including unmatched Python files.
+        """
+        file_stages: Dict[str, List[str]] = {}
+
+        if all_python_files:
+            for file_path in all_python_files:
+                file_stages[file_path] = []
+
+        for stage, files in detected_stages.items():
+            for file_info in files:
+                filepath = file_info.get("file")
+                if not filepath:
+                    continue
+                if filepath not in file_stages:
+                    file_stages[filepath] = []
+                if stage not in file_stages[filepath]:
+                    file_stages[filepath].append(stage)
+
+        for filepath in file_stages:
+            file_stages[filepath] = sorted(file_stages[filepath])
+
+        return dict(sorted(file_stages.items()))
+
+    def _build_detected_stages_from_file_stages(
+        self,
+        file_stages: Dict[str, List[str]],
+        base_detected_stages: Dict[str, List[Dict[str, Any]]],
+        manual_files: Optional[Set[str]] = None
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Rebuild stage-centric representation from file-centric map.
+        """
+        evidence_lookup = self._build_evidence_lookup(base_detected_stages)
+        manual_files = manual_files or set()
+        rebuilt: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+
+        for filepath in sorted(file_stages.keys()):
+            stages = file_stages[filepath]
+            for stage in stages:
+                if stage not in self.schema.valid_stages:
+                    continue
+                evidences = evidence_lookup.get(stage, {}).get(filepath)
+
+                if filepath in manual_files or not evidences:
+                    evidences = [self._manual_override_evidence()]
+
+                rebuilt[stage].append({
+                    "file": filepath,
+                    "evidences": evidences
+                })
+
+        return dict(sorted(rebuilt.items()))
+
+    def _build_evidence_lookup(
+        self,
+        detected_stages: Dict[str, List[Dict[str, Any]]]
+    ) -> Dict[str, Dict[str, List[Dict[str, str]]]]:
+        """
+        Build stage/file evidence lookup table from stage-centric metadata.
+        """
+        lookup: Dict[str, Dict[str, List[Dict[str, str]]]] = defaultdict(dict)
+
+        for stage, files in detected_stages.items():
+            if stage not in self.schema.valid_stages:
+                continue
+            for file_info in files:
+                filepath = self._normalize_file_path(file_info.get("file"))
+                evidences = file_info.get("evidences", [])
+                if not filepath:
+                    continue
+                lookup[stage][filepath] = [
+                    {"method": ev.get("method", ""), "value": ev.get("value", "")}
+                    for ev in evidences
+                ]
+
+        return lookup
+
+    def _manual_override_evidence(self) -> Dict[str, str]:
+        """Evidence marker for user-provided manual stage assignments."""
+        return {
+            "method": "manual",
+            "value": "user_override"
+        }
     
     def _get_python_files(self) -> List[str]:
         """
@@ -364,60 +421,4 @@ class PipelineAnalyzer(BaseAnalyzer):
         Returns:
             List of Python file paths
         """
-        python_files = []
-        
-        # Excluded directories
-        exclude_dirs = {
-            '__pycache__', '.git', 'venv', 'env', 
-            'node_modules', '.vscode', '.idea'
-        }
-        
-        for root, dirs, files in os.walk(self.local_path):
-            # Remove excluded directories from search
-            dirs[:] = [d for d in dirs if d not in exclude_dirs]
-            
-            for file in files:
-                if file.endswith('.py'):
-                    filepath = os.path.join(root, file)
-                    # Make path relative to local_path
-                    rel_path = os.path.relpath(filepath, self.local_path)
-                    python_files.append(rel_path)
-        
-        return python_files
-    
-    def _default_config(self) -> Dict:
-        """
-        Return default pipeline configuration.
-        
-        Returns:
-            Default configuration dictionary
-        """
-        return {
-            "stages": {
-                "data_collection": {
-                    "filename_patterns": ["load", "collect", "fetch", "download"],
-                    "keywords": ["read_csv", "read_excel", "read_json", "load_data"],
-                    "imports": ["pandas", "numpy", "requests"]
-                },
-                "data_cleaning": {
-                    "filename_patterns": ["clean", "preprocess", "prepare"],
-                    "keywords": ["dropna", "fillna", "drop_duplicates", "clean"],
-                    "imports": ["pandas", "numpy"]
-                },
-                "feature_engineering": {
-                    "filename_patterns": ["feature", "transform", "encode"],
-                    "keywords": ["fit_transform", "transform", "encode", "scale"],
-                    "imports": ["sklearn.preprocessing", "sklearn.feature_extraction"]
-                },
-                "model_training": {
-                    "filename_patterns": ["train", "model", "fit"],
-                    "keywords": ["fit(", "train", "model.fit"],
-                    "imports": ["sklearn", "tensorflow", "keras", "torch"]
-                },
-                "model_evaluation": {
-                    "filename_patterns": ["eval", "test", "validate", "score"],
-                    "keywords": ["score", "evaluate", "predict", "accuracy"],
-                    "imports": ["sklearn.metrics"]
-                }
-            }
-        }
+        return self.context.get_all_python_files()

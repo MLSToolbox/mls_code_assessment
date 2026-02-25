@@ -27,8 +27,8 @@ class FileStructureAnalyzer(BaseAnalyzer):
         Analyze file structure patterns.
         
         The files to analyze are determined by the AnalysisContext configuration:
-        - If context.all_files=True: Analyzes ALL Python files
-        - If context.all_files=False: Prefers ML pipeline files, falls back to all files
+        - Uses pipeline-detected scope
+        - Includes manual stage assignments when provided
         
         Returns:
             AnalysisResult with structure quality score and details.
@@ -46,7 +46,7 @@ class FileStructureAnalyzer(BaseAnalyzer):
             }
         }
         
-        # Get files from context (respects all_files configuration)
+        # Get files from context (pipeline + manual overrides scope)
         python_files = self.context.get_python_files()
         results['summary']['total_files'] = len(python_files)
         
@@ -282,9 +282,9 @@ class FileStructureAnalyzer(BaseAnalyzer):
         
         # Scan mode info
         scan_mode_text = {
-            'all_files': 'all Python files in project',
-            'ml_only': 'ML pipeline files only',
-            'all_files_fallback': 'all Python files (no pipeline detected)'
+            'pipeline_scope': 'pipeline-detected files',
+            'manual_override_scope': 'pipeline files including manual overrides',
+            'empty_scope': 'no files with assigned stages'
         }
         mode = summary['scan_mode']
         messages.append(f"Analyzed {summary['total_files']} files ({scan_mode_text.get(mode, mode)})")

@@ -4,24 +4,39 @@ Microservicio para análisis automatizado de calidad de código Python, enfocada
 
 ## Endpoints
 
-### `POST /api/upload-zip`
-Sube un ZIP con código Python y obtiene:
+### `POST /api/upload`
+Sube código Python (ZIP o repositorio Git) y obtiene:
 - `auto_detected_pipeline`: Etapas ML detectadas automáticamente
 - `session_id`: Identificador de sesión
 - `tree_structure`: Estructura de archivos
+
+**Formato esperado (`multipart/form-data`):**
+- `file`: archivo `.zip` con el código fuente
+- `git_url`: URL `http(s)` de repositorio Git terminada en `.git`
+- Enviar **solo uno** de los dos campos anteriores
 
 ### `POST /api/analyze/<session_id>`
 Ejecuta analizadores sobre sesión existente:
 ```json
 {
-  "analyzers": ["pylint", "radon_cc", "fpc", "pipeline"],
-  "all_files": false,
+  "analyzers": ["pylint", "radon_cc", "pipeline", "fcpm"],
   "pipeline_overrides": {
     "file_stages": {"path/file.py": ["data_collection"]},
     "excluded_files": ["tests/"]
   }
 }
 ```
+
+Nota: el análisis requiere al menos un archivo con etapas asignadas (auto-detectadas o manuales).
+
+Excepción: si `analyzers` contiene solo `pipeline`, la ejecución puede continuar aunque el scope esté vacío (útil para inspeccionar un pipeline incompleto).
+
+### Fuente única de verdad (stages/phases)
+
+- La definición oficial de stages, phases y required stages vive en:
+  - `src/analyzers/pipeline/pipeline_stages.json`
+- Los overrides (`pipeline_overrides.file_stages`) se validan contra ese JSON.
+- `required_stages` también se toma de ese JSON para calcular `is_valid_pipeline` y `missing_stages`.
 
 **Analizadores disponibles:**
 - `pylint` - Calidad de código (PEP 8)
@@ -31,6 +46,9 @@ Ejecuta analizadores sobre sesión existente:
 - `ccpm` - Cohesión Conceptual de Módulos Pipeline
 - `scpm` - Cohesión Estructural de Módulos Pipeline
 - `fcpm` - Cohesión Funcional de Módulos Pipeline
+- `ccpp` - Cohesión Conceptual de Paquetes Pipeline
+- `scpp` - Cohesión Estructural de Paquetes Pipeline
+- `fcpp` - Cohesión Funcional de Paquetes Pipeline
 - `file_structure` - Estructura de directorios
 - `ml_content` - Detección de contenido ML/no-ML
 
@@ -61,10 +79,10 @@ src/
 - `base_analyzer.py` - Clase abstracta base para analizadores
 - `base_evaluator.py` - Clase base para evaluadores de reglas
 - `factory.py` - Factory pattern para crear analizadores
-- `pipeline/` - Analizador de pipeline ML (stages, overrides, config)
+- `pipeline/` - Analizador de pipeline ML (stages, overrides, schema central)
 - `ccpm/` - Conceptual Cohesion of Pipeline Modules (migrado)
 - `ml_content/` - Detección de contenido ML vs non-ML
-- Analizadores individuales: `pylint_analyzer.py`, `radon_cc_analyzer.py`, `scpm_analyzer.py`, `fcpm_analyzer.py`, `lccml_analyzer.py`
+- Analizadores individuales: `pylint_analyzer.py`, `radon_cc_analyzer.py`, `radon_mi_analyzer.py`, `file_structure_analyzer.py`
 
 **`core/`** - Componentes centrales reutilizables
 - `analysis_result.py` - Modelo de resultado de análisis
@@ -132,4 +150,3 @@ SESSION_BASE_PATH=/tmp/mls_sessions
 SESSION_TTL_MINUTES=60
 CLEANUP_INTERVAL_MINUTES=30
 ```
-
