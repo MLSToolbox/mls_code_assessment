@@ -1,7 +1,6 @@
 from typing import Dict, Any, Tuple, Union
 from datetime import datetime
 from werkzeug.datastructures import FileStorage
-
 from session.session_manager import SessionManager
 from session.session_storage import SessionStorage
 from analyzers.factory import AnalyzerFactory
@@ -109,6 +108,8 @@ class AnalysisService:
         # Get pipeline metadata
         metadata = session.get_metadata()
         pipeline_metadata = metadata.get("auto_detected_pipeline")
+        tree_metadata = metadata.get("tree_structure")
+
         if not isinstance(pipeline_metadata, dict):
             raise ValidationError(
                 "Session pipeline metadata is missing or invalid.",
@@ -138,6 +139,7 @@ class AnalysisService:
             session_id, 
             session.local_path,
             pipeline_metadata=pipeline_metadata,
+            tree_metadata=tree_metadata,
             manual_override_applied=has_pipeline_overrides
         )
         pipeline_metadata = shared_context.get_pipeline_metadata() or pipeline_metadata

@@ -1,11 +1,21 @@
 import ast
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-
+from typing import Any, Dict, List, Optional, Set
 from analyzers.pipeline.pipeline_schema import get_pipeline_schema
+from analyzers.common.package_utils import transverse_tree_to_get_packages_and_files, extract_file_features
 
-
+@dataclass
+class FileFeatures:
+    """Extracted features from a file's AST."""
+    definitions: Set[str] = field(default_factory=set)
+    imports: List[ast.AST] = field(default_factory=list)
+    calls: List[ast.Call] = field(default_factory=list)
+    attributes: Set[str] = field(default_factory=set)
+    names: Set[str] = field(default_factory=set)
+    name_nodes: List[ast.Name] = field(default_factory=list)
+    constants: Set[str] = field(default_factory=set)
+    files_accessed: Set[str] = field(default_factory=set)
 @dataclass
 class FileAnalysisCache:
     """Cache for a single file analysis."""
@@ -14,6 +24,7 @@ class FileAnalysisCache:
     ast_tree: Optional[ast.Module] = None
     source_code: Optional[str] = None
     metrics: Dict[str, Any] = field(default_factory=dict)
+    features: Optional[FileFeatures] = None
 
 
 class AnalysisContext:
@@ -29,14 +40,17 @@ class AnalysisContext:
         session_id: str,
         local_path: str,
         pipeline_metadata: Optional[Dict[str, Any]] = None,
+        tree_metadata: Optional[Dict[str, Any]] = None,
         manual_override_applied: bool = False,
     ):
         self.session_id = session_id
         self.local_path = local_path
         self._file_cache: Dict[str, FileAnalysisCache] = {}
         self._global_metrics: Dict[str, Any] = {}
+        self._packages_and_files:Optional[List[Any]] = None
+        self._tree_metadata: Optional[Dict[str, Any]] = tree_metadata
+        self._python_files_cache: Optional[List[str]] = None  # Cache for file discovery
         self._manual_override_applied = manual_override_applied
-        self._python_files_cache: Optional[List[str]] = None
         self._schema = get_pipeline_schema()
         self._pipeline_metadata: Optional[Dict[str, Any]] = self._normalize_pipeline_metadata(
             pipeline_metadata
@@ -57,6 +71,25 @@ class AnalysisContext:
                 return None
 
         return cache.ast_tree
+    def get_file_features(self,file_path:str) -> Optional[FileFeatures]:
+        normalized_path=self._normalize_file_path(file_path)
+        if normalized_path not in self._file_cache:
+            self._file_cache[normalized_path]=FileAnalysisCache(normalized_path)
+        cache=self._file_cache[normalized_path]
+        if cache.features is not None:
+            return cache.features
+        tree = self.get_file_ast(normalized_path)
+        if not tree:
+            cache.features = FileFeatures()
+            return cache.features
+            
+        raw_features = extract_file_features(tree)
+        features = FileFeatures(**raw_features)
+                    
+        cache.features = features
+        return features
+
+
 
     def get_file_source(self, file_path: str) -> Optional[str]:
         normalized_path = self._normalize_file_path(file_path)
@@ -79,7 +112,17 @@ class AnalysisContext:
             self._file_cache[normalized_path] = FileAnalysisCache(normalized_path)
 
         self._file_cache[normalized_path].metrics[metric_name] = value
+    def _get_packages_and_files_from_tree(self) -> List[Any]:
+        dir_list=[]
+        transverse_tree_to_get_packages_and_files(self._tree_metadata,dir_list=dir_list)
+        return dir_list
+    def set_packages_and_files(self, packages_and_files: List[Any]) -> None:
+        self._packages_and_files = packages_and_files
 
+    def get_packages_and_files(self) -> Optional[List[Any]]:
+        if self._packages_and_files is None:
+           self._packages_and_files = self._get_packages_and_files_from_tree()
+        return self._packages_and_files
     def get_file_metric(self, file_path: str, metric_name: str) -> Optional[Any]:
         normalized_path = self._normalize_file_path(file_path)
         if normalized_path in self._file_cache:
@@ -162,9 +205,19 @@ class AnalysisContext:
         self._file_cache.clear()
         self._global_metrics.clear()
         self._python_files_cache = None
+        self._packages_and_files = None
 
     def get_pipeline_metadata(self) -> Optional[Dict[str, Any]]:
         return self._pipeline_metadata
+    def get_tree_metadata(self) -> Optional[Dict[str, Any]]:
+        """
+        Get tree structure metadata.
+        
+        Returns:
+            Tree structure metadata from TreeGenerator or None if not available
+        """
+        return self._tree_metadata
+    
 
     def get_stage_assignments(self) -> Dict[str, List[str]]:
         """

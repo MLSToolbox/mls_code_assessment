@@ -28,6 +28,15 @@ class SCPPAnalyzer(BaseAnalyzer):
         return "scpp"
 
     def analyze(self) -> AnalysisResult:
+        packages=self.context.get_packages_and_files()
+        if not packages:
+            return self._create_result(
+                score=0.0,
+                messages=[],
+                module_count=0,
+                details={},
+                group_key="by_package",
+            )
         results = {
             "packages": {},
             "summary": {
@@ -41,51 +50,52 @@ class SCPPAnalyzer(BaseAnalyzer):
                 "scan_mode": self.context.get_scan_mode(),
             },
         }
+        for package in packages:
+            graph_data = self._analyze_package_graph(package["modules"])
+            if not graph_data["valid"] :
+                results["packages"][package["path"]]={
+                    **graph_data,
+                    "scpp":None,
+                    "cohesion_level":"not_applicable"
+                }
+            else :
+                groups = graph_data["groups"]
+                indirect_shared_pairs = 0
+                for group in groups:
+                    k = len(group)
+                    if k > 1:
+                        indirect_shared_pairs += (k * (k - 1)) // 2
 
-        scoped_files = sorted(set(self.context.get_python_files()))
-        package_dirs = self._discover_scoped_packages(scoped_files)
-
-        scpp_scores: List[float] = []
-        for package_path in package_dirs:
-            graph_data = self._analyze_package_graph(package_path, scoped_files)
-            if not graph_data["valid"]:
-                continue
-
-            groups = graph_data["groups"]
-            indirect_shared_pairs = 0
-            for group in groups:
-                group_size = len(group)
-                if group_size > 1:
-                    indirect_shared_pairs += (group_size * (group_size - 1)) // 2
-
-            node_count = graph_data["n_nodes"]
-            total_pairs = graph_data["n_pairs"]
-            scpp_value = (
-                (2 * indirect_shared_pairs) / (node_count * (node_count - 1))
-                if total_pairs > 0
-                else 0
-            )
-
-            results["packages"][package_path] = {
-                "scpp": round(scpp_value, 3),
-                **graph_data,
-            }
-            scpp_scores.append(scpp_value)
-
-            if scpp_value >= 0.8:
-                results["summary"]["very_high"] += 1
-            elif scpp_value >= 0.6:
-                results["summary"]["high"] += 1
-            elif scpp_value >= 0.4:
-                results["summary"]["medium"] += 1
-            elif scpp_value >= 0.2:
-                results["summary"]["low"] += 1
-            else:
-                results["summary"]["very_low"] += 1
-
-        results["summary"]["total_packages"] = len(scpp_scores)
-        if scpp_scores:
-            results["summary"]["average_scpp"] = sum(scpp_scores) / len(scpp_scores)
+                m = graph_data["n_nodes"]
+                total_pairs = graph_data["n_pairs"]
+                scpp_value = (
+                    (2 * indirect_shared_pairs) / (m * (m - 1))
+                    if total_pairs > 0
+                    else 0
+                )
+                results["packages"][package["path"]] = {
+                    "scpp": round(scpp_value, 3),
+                    **graph_data,
+                }
+                if scpp_value >= 0.8:
+                    cohesion_level="very_high"
+                    results["summary"]["very_high"] += 1
+                elif scpp_value >= 0.6:
+                    cohesion_level="high"
+                    results["summary"]["high"] += 1
+                elif scpp_value >= 0.4:
+                    cohesion_level="medium"
+                    results["summary"]["medium"] += 1
+                elif scpp_value >= 0.2:
+                    cohesion_level="low"
+                    results["summary"]["low"] += 1
+                else:
+                    cohesion_level="very_low"
+                    results["summary"]["very_low"] += 1
+                results["packages"][package["path"]]["cohesion_level"]=cohesion_level
+        results["summary"]["total_packages"] = len(packages)
+        if results["summary"]["total_packages"]>0:
+            results["summary"]["average_scpp"] = sum(results["packages"][package["path"]]["scpp"] for package in packages if results["packages"][package["path"]]["scpp"] is not None) / results["summary"]["total_packages"]
             final_score = results["summary"]["average_scpp"] * 10
         else:
             final_score = 0.0
@@ -93,7 +103,7 @@ class SCPPAnalyzer(BaseAnalyzer):
         return self._create_result(
             score=round(final_score, 2),
             messages=self._generate_messages(results),
-            module_count=len(scpp_scores),
+            module_count=results["summary"]["total_packages"],
             details=results,
             group_key="by_package",
         )
@@ -106,131 +116,59 @@ class SCPPAnalyzer(BaseAnalyzer):
                 messages.append(msg)
         return messages
 
-    def _discover_scoped_packages(self, scoped_files: List[str]) -> List[str]:
-        packages: Set[str] = set()
-        for file_path in scoped_files:
-            current = os.path.dirname(file_path).replace("\\", "/") or "."
-            while True:
-                packages.add(current)
-                if current in ("", "."):
-                    break
-                current = os.path.dirname(current).replace("\\", "/") or "."
-        return sorted(packages)
 
-    def _analyze_package_graph(self, package_path: str, scoped_files: List[str]) -> Dict[str, Any]:
-        nodes = self._get_package_nodes(package_path, scoped_files)
-        node_keys = [node["path"] for node in nodes]
-        node_count = len(node_keys)
+    def _analyze_package_graph(self, nodes:List[str]) -> Dict[str, Any]:
+        node_count = len(nodes)
         if node_count < 2:
             return {
                 "valid": False,
                 "n_nodes": node_count,
-                "nodes": [node["name"] for node in nodes],
+                "connections": [],
+                "groups": [],
+                "isolated_nodes": [],
+                "nodes": nodes,
+                "n_pairs": 0,
+                "n_shared": 0,
             }
-
         node_resources: Dict[str, Set[str]] = {}
-        for node in nodes:
-            if node["type"] == "package":
-                node_resources[node["path"]] = self._get_subpackage_resources(
-                    node["path"], scoped_files
-                )
-            else:
-                node_resources[node["path"]] = self._extract_file_resources(node["path"])
+        for node_path in nodes:
+            node_resources[node_path] = self._extract_file_resources(node_path)
+        
+        connections=[]
+        adj_indices=defaultdict(set)
+        for i in range(len(nodes)):
+            node_a_res=node_resources[nodes[i]]
+            for j in range(i+1,len(nodes)) :
+                node_b_res=node_resources[nodes[j]]
+                intersection=node_a_res.intersection(node_b_res)
+                if intersection :
+                    connections.append({
+                        "node_a":nodes[i],
+                        "node_b":nodes[j],
+                        "shared_resources":list(intersection)[:5]
+                    })
+                    adj_indices[i].add(j)
+                    adj_indices[j].add(i)
 
-        connections: List[Dict[str, Any]] = []
-        adjacency = defaultdict(set)
-
-        for i in range(len(node_keys)):
-            node_a = node_keys[i]
-            resources_a = node_resources[node_a]
-            for j in range(i + 1, len(node_keys)):
-                node_b = node_keys[j]
-                resources_b = node_resources[node_b]
-                shared = resources_a.intersection(resources_b)
-                if shared:
-                    connections.append(
-                        {
-                            "node_a": os.path.basename(node_a),
-                            "node_b": os.path.basename(node_b),
-                            "shared_resources": sorted(shared)[:5],
-                        }
-                    )
-                    adjacency[i].add(j)
-                    adjacency[j].add(i)
-
-        groups, isolated_nodes = find_connected_groups(node_keys, adjacency)
+        groups, isolated_nodes = find_connected_groups(nodes,adj_indices)
         return {
             "valid": True,
             "n_nodes": node_count,
             "connections": connections,
             "groups": groups,
             "isolated_nodes": isolated_nodes,
-            "nodes": [node["name"] for node in nodes],
+            "nodes": nodes,
             "n_pairs": (node_count * (node_count - 1)) // 2,
             "n_shared": len(connections),
         }
-
-    def _get_package_nodes(self, package_path: str, scoped_files: List[str]) -> List[Dict[str, str]]:
-        direct_modules: Set[str] = set()
-        direct_subpackages: Set[str] = set()
-        prefix = "" if package_path == "." else f"{package_path}/"
-
-        for file_path in scoped_files:
-            normalized = file_path.replace("\\", "/")
-            if prefix and not normalized.startswith(prefix):
-                continue
-
-            relative = normalized[len(prefix):] if prefix else normalized
-            if not relative:
-                continue
-
-            parts = relative.split("/")
-            if len(parts) == 1:
-                file_name = parts[0]
-                if (
-                    file_name.endswith(".py")
-                    and file_name not in {"__init__.py", "__main__.py", "conftest.py", "setup.py"}
-                ):
-                    direct_modules.add(normalized)
-            else:
-                subpackage = f"{package_path}/{parts[0]}" if package_path != "." else parts[0]
-                direct_subpackages.add(subpackage.replace("\\", "/"))
-
-        nodes: List[Dict[str, str]] = []
-        for module in sorted(direct_modules):
-            nodes.append({"path": module, "type": "module", "name": os.path.basename(module)})
-        for package in sorted(direct_subpackages):
-            nodes.append({"path": package, "type": "package", "name": os.path.basename(package)})
-        return nodes
-
-    def _get_subpackage_resources(self, subpackage_path: str, scoped_files: List[str]) -> Set[str]:
-        resources: Set[str] = set()
-        prefix = f"{subpackage_path}/"
-        for file_path in scoped_files:
-            normalized = file_path.replace("\\", "/")
-            if normalized.startswith(prefix):
-                resources.update(self._extract_file_resources(normalized))
-        return resources
-
     def _extract_file_resources(self, file_path: str) -> Set[str]:
         resources: Set[str] = set()
-        tree = self.context.get_file_ast(file_path)
-        if not tree:
+        features = self.context.get_file_features(file_path)
+        if not features:
             return resources
-
-        resources.update(get_files_accessed(tree))
-
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Attribute):
-                attr_path = get_attribute_path(node)
-                if attr_path and attr_path.startswith("self."):
-                    resources.add(attr_path)
-            elif isinstance(node, ast.Name):
-                if is_likely_global_variable(node.id):
-                    resources.add(node.id)
-
-            if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                if is_likely_global_variable(node.value):
-                    resources.add(node.value)
-
+            
+        resources.update(features.files_accessed)
+        resources.update(features.attributes)
+        resources.update(features.names)
+        resources.update(features.constants)
         return resources

@@ -12,6 +12,7 @@ from analyzers.common.variable_detection import (
     get_files_accessed,
     get_method_calls
 )
+from analyzers.common.package_utils import  find_connected_groups,transverse_tree_to_get_packages_and_files
 
 __all__ = [
     'extract_methods',
@@ -20,5 +21,7 @@ __all__ = [
     'identify_disconnected_methods',
     'is_likely_global_variable',
     'get_files_accessed',
-    'get_method_calls'
+    'get_method_calls',
+    'find_connected_groups',
+    'transverse_tree_to_get_packages_and_files'
 ]

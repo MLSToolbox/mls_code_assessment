@@ -85,6 +85,8 @@ class CCPMAnalyzer(BaseAnalyzer):
         
         python_files = self.context.get_python_files()
        
+        
+       
         results['summary']['total_files'] = len(python_files)
         
         # List to store per-file messages (new format)
