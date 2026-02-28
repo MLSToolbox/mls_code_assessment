@@ -1,0 +1,30 @@
+services:
+  code-assessment:
+    build:
+      context: .
+      args:
+        ENVIRONMENT: ${ENVIRONMENT:-local}
+    image: ${IMAGE_TAG:-mls_toolbox_code_assessment:local}
+    container_name: ${CONTAINER_NAME:-mls_toolbox_code_assessment}
+    volumes:
+      - ./src:/app/src
+    ports:
+      - "${EXTERNAL_PORT:-5060}:${PORT:-5060}"
+    environment:
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-5060}
+      - DEBUG=${DEBUG:-False}
+      - SESSION_BASE_PATH=${SESSION_BASE_PATH:-/tmp/mls_sessions}
+      - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
+      - CLEANUP_INTERVAL_MINUTES=${CLEANUP_INTERVAL_MINUTES:-30}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - EXECUTION_MODE=prod
+      - ENVIRONMENT=${ENVIRONMENT:-local}
+      - PYTHONPATH=/app/src
+    networks:
+      - mls-network
+    restart: unless-stopped
+
+networks:
+  mls-network:
+    name: ${DOCKER_NETWORK:-mls-network}

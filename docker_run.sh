@@ -1,44 +1,65 @@
 #!/bin/bash
 
 # Script unificado para construir y ejecutar el contenedor Docker del code assessment
-# Soporta múltiples ambientes: local, development, production
+# Usa docker compose con bind mount de ./src para evitar rebuilds por cambios de código
 
 set -e
 
-# Valores por defecto
 ENVIRONMENT="local"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Función de ayuda
 show_help() {
     cat << EOF
 Uso: ./docker_run.sh [OPTIONS]
 
-Construye y ejecuta el contenedor Docker del code assessment para el ambiente especificado.
+Construye y ejecuta el contenedor Docker del code assessment usando docker compose.
+El código fuente se monta vía volumen: los cambios en ./src se reflejan automáticamente.
 
 Opciones:
     --env=ENVIRONMENT    Ambiente a usar: local, development, production (default: local)
-    --skip-build        Omitir la construcción de la imagen
-    -h, --help          Muestra esta ayuda
+    --build              Forzar reconstrucción de la imagen (solo necesario si cambian dependencias)
+    --restart            Reiniciar el contenedor (útil tras git pull en producción)
+    --down               Detener y eliminar el contenedor
+    --logs               Ver logs del contenedor
+    -h, --help           Muestra esta ayuda
 
 Ejemplos:
-    ./docker_run.sh                      # Construye y ejecuta en ambiente local
-    ./docker_run.sh --env=development    # Construye y ejecuta en desarrollo
-    ./docker_run.sh --env=production     # Construye y ejecuta en producción
-    ./docker_run.sh --skip-build         # Solo ejecuta sin construir
+    ./docker_run.sh                          # Levanta en ambiente local
+    ./docker_run.sh --env=development        # Levanta en desarrollo
+    ./docker_run.sh --env=production         # Levanta en producción
+    ./docker_run.sh --env=production --build # Reconstruye imagen (si cambiaron dependencias)
+    ./docker_run.sh --env=production --restart  # Reinicia tras actualizar código
+    ./docker_run.sh --down                   # Detiene el contenedor
+
+Flujo típico en EC2:
+    1. Primera vez:  ./docker_run.sh --env=production --build
+    2. Actualizar:   git pull && ./docker_run.sh --env=production --restart
+    3. Si cambian dependencias: ./docker_run.sh --env=production --build
 EOF
 }
 
-# Parsear argumentos
-SKIP_BUILD=false
+ACTION="up"
+BUILD_FLAG=""
 for arg in "$@"; do
     case $arg in
         --env=*)
             ENVIRONMENT="${arg#*=}"
             shift
             ;;
-        --skip-build)
-            SKIP_BUILD=true
+        --build)
+            BUILD_FLAG="--build"
+            shift
+            ;;
+        --restart)
+            ACTION="restart"
+            shift
+            ;;
+        --down)
+            ACTION="down"
+            shift
+            ;;
+        --logs)
+            ACTION="logs"
             shift
             ;;
         -h|--help)
@@ -53,13 +74,11 @@ for arg in "$@"; do
     esac
 done
 
-# Validar ambiente
 if [[ ! "$ENVIRONMENT" =~ ^(local|development|production)$ ]]; then
     echo "Error: Ambiente '$ENVIRONMENT' no válido. Usa: local, development, o production"
     exit 1
 fi
 
-# Cargar variables de entorno desde la carpeta del proyecto
 ENV_FILE="$SCRIPT_DIR/.env.$ENVIRONMENT"
 if [ ! -f "$ENV_FILE" ]; then
     echo "Advertencia: Archivo $ENV_FILE no encontrado."
@@ -72,79 +91,43 @@ if [ ! -f "$ENV_FILE" ]; then
     fi
 fi
 
-# Cargar variables
-source "$ENV_FILE"
-
 echo "=========================================="
 echo "Code Assessment - Ambiente: $ENVIRONMENT"
 echo "=========================================="
 
-# PASO 1: Construir imagen
-if [ "$SKIP_BUILD" = false ]; then
-    echo ""
-    echo "📦 PASO 1/2: Construyendo imagen..."
-    echo "Imagen: $IMAGE_TAG"
-    echo "=========================================="
-    
-    docker build \
-        --build-arg ENVIRONMENT="$ENVIRONMENT" \
-        -t "$IMAGE_TAG" \
-        .
-    
-    echo "✓ Imagen construida exitosamente"
-else
-    echo "⏭️  Omitiendo construcción de imagen"
-fi
+cd "$SCRIPT_DIR"
 
-# PASO 2: Ejecutar contenedor
-echo ""
-echo "🚀 PASO 2/2: Ejecutando contenedor..."
-echo "Contenedor: $CONTAINER_NAME"
-echo "Puerto interno: $PORT"
-[ -n "$EXTERNAL_PORT" ] && echo "Puerto externo: $EXTERNAL_PORT"
-echo "Red: $DOCKER_NETWORK"
-echo "Debug: $DEBUG"
-echo "=========================================="
-
-# Verificar si la red existe, si no, crearla
-if ! docker network inspect "$DOCKER_NETWORK" &> /dev/null; then
-    echo "Creando red Docker: $DOCKER_NETWORK"
-    docker network create "$DOCKER_NETWORK"
-fi
-
-# Detener y eliminar contenedor existente si existe
-if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    echo "Deteniendo contenedor existente..."
-    docker stop "$CONTAINER_NAME" || true
-    docker rm "$CONTAINER_NAME" || true
-fi
-
-# Solo exponer puerto si EXTERNAL_PORT está definido
-if [ -n "$EXTERNAL_PORT" ]; then
-    PORT_ARG="-p ${EXTERNAL_PORT}:${PORT}"
-else
-    PORT_ARG=""
-fi
-
-# Ejecutar contenedor
-docker run -d \
-    $PORT_ARG \
-    --network "$DOCKER_NETWORK" \
-    --name "$CONTAINER_NAME" \
-    -e HOST="$HOST" \
-    -e PORT="$PORT" \
-    -e DEBUG="$DEBUG" \
-    -e SESSION_BASE_PATH="$SESSION_BASE_PATH" \
-    -e SESSION_TTL_MINUTES="$SESSION_TTL_MINUTES" \
-    -e CLEANUP_INTERVAL_MINUTES="$CLEANUP_INTERVAL_MINUTES" \
-    -e CORS_ORIGINS="$CORS_ORIGINS" \
-    "$IMAGE_TAG"
-
-echo ""
-echo "=========================================="
-echo "✅ COMPLETADO - Code Assessment corriendo"
-echo "=========================================="
-echo "Ambiente: $ENVIRONMENT"
-[ -n "$EXTERNAL_PORT" ] && echo "Acceso: http://localhost:$EXTERNAL_PORT"
-echo "Contenedor: $CONTAINER_NAME"
-echo "=========================================="
+case $ACTION in
+    up)
+        echo ""
+        echo "Levantando servicio con docker compose..."
+        echo "Código fuente montado desde: ./src"
+        echo "=========================================="
+        docker compose --env-file "$ENV_FILE" up -d $BUILD_FLAG
+        echo ""
+        echo "=========================================="
+        echo "Contenedor corriendo"
+        echo "=========================================="
+        echo "Ambiente: $ENVIRONMENT"
+        echo ""
+        echo "Para ver logs:       ./docker_run.sh --env=$ENVIRONMENT --logs"
+        echo "Para reiniciar:      ./docker_run.sh --env=$ENVIRONMENT --restart"
+        echo "Para detener:        ./docker_run.sh --env=$ENVIRONMENT --down"
+        echo "=========================================="
+        ;;
+    restart)
+        echo ""
+        echo "Reiniciando contenedor (el código actualizado se recarga)..."
+        docker compose --env-file "$ENV_FILE" restart
+        echo "Contenedor reiniciado."
+        ;;
+    down)
+        echo ""
+        echo "Deteniendo contenedor..."
+        docker compose --env-file "$ENV_FILE" down
+        echo "Contenedor detenido."
+        ;;
+    logs)
+        docker compose --env-file "$ENV_FILE" logs -f
+        ;;
+esac
