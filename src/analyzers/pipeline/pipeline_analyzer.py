@@ -89,7 +89,8 @@ class PipelineAnalyzer(BaseAnalyzer):
             "detected_stages": modified_detected_stages,
             "file_stages": dict(sorted(modified_file_stages.items())),
             "missing_stages": missing_stages,
-            "files_analyzed": len(modified_file_stages)
+            "files_analyzed": len(modified_file_stages),
+            "syntax_error_files": auto_detected.get("syntax_error_files", [])
         }
     
     def _is_excluded(self, filepath: str, patterns: List[str]) -> bool:
@@ -139,13 +140,13 @@ class PipelineAnalyzer(BaseAnalyzer):
         Returns:
             AnalysisResult with pipeline detection details
         """
-        _, stage_files = self._detect_pipeline()
+        _, stage_files, syntax_error_files = self._detect_pipeline()
         detected_stages = self._format_stages(stage_files)
         python_files = self._get_python_files()
         file_stages = self._build_file_stages(detected_stages, python_files)
         missing_stages = self._get_missing_stages(detected_stages)
         is_pipeline = len(missing_stages) == 0
-        
+
         return self._create_result(
             score=10.0 if is_pipeline else 0.0,
             messages={},
@@ -155,7 +156,8 @@ class PipelineAnalyzer(BaseAnalyzer):
                 "detected_stages": detected_stages,
                 "file_stages": file_stages,
                 "missing_stages": missing_stages,
-                "files_analyzed": len(python_files)
+                "files_analyzed": len(python_files),
+                "syntax_error_files": syntax_error_files
             }
         )
     
@@ -192,67 +194,83 @@ class PipelineAnalyzer(BaseAnalyzer):
         # Convert to JSON bytes
         return json.dumps(report, indent=2).encode('utf-8')
     
-    def _detect_pipeline(self) -> Tuple[bool, Dict[str, List[Tuple[str, str, str]]]]:
+    def _detect_pipeline(self) -> Tuple[bool, Dict[str, List[Tuple[str, str, str]]], List[str]]:
         """
         Detect pipeline stages in code.
-        
+
         Returns:
-            Tuple of (is_valid_pipeline, stage_files_dict)
+            Tuple of (is_valid_pipeline, stage_files_dict, syntax_error_files)
         """
         stage_files: Dict[str, List[Tuple[str, str, str]]] = defaultdict(list)
-        
+        syntax_error_files: List[str] = []
+
         python_files = self._get_python_files()
-        
+
         for filepath in python_files:
-            detected = self._analyze_file(filepath)
+            detected, had_syntax_error = self._analyze_file(filepath)
+            if had_syntax_error:
+                syntax_error_files.append(filepath)
             for stage, evidences in detected.items():
                 for method, value in evidences:
                     stage_files[stage].append((filepath, method, value))
-        
+
         # Check if all required stages are present
         detected_stages = set(stage_files.keys())
         is_valid = self.required_stages.issubset(detected_stages)
-        
-        return is_valid, stage_files
+
+        return is_valid, stage_files, sorted(syntax_error_files)
     
-    def _analyze_file(self, filepath: str) -> Dict[str, List[Tuple[str, str]]]:
+    def _analyze_file(self, filepath: str) -> Tuple[Dict[str, List[Tuple[str, str]]], bool]:
         """
         Analyze a single file for pipeline stages.
-        
+
         Args:
             filepath: Path to Python file (relative or absolute)
-            
+
         Returns:
-            Dictionary mapping stages to evidences
+            Tuple of (stage evidences, had_syntax_error). Filename and keyword
+            evidence come from the raw text and don't need a successful AST
+            parse, so a SyntaxError only blocks import-based evidence instead
+            of discarding everything found for the file.
         """
         detected: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
-        
+        had_syntax_error = False
+
         try:
             # Convert to absolute path if relative
             if not os.path.isabs(filepath):
                 full_path = os.path.join(self.local_path, filepath)
             else:
                 full_path = filepath
-            
+
             with open(full_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            
+        except Exception:
+            return detected, had_syntax_error  # Unreadable file: no evidence to collect
+
+        tree = None
+        try:
             tree = ast.parse(content)
-            
-            # Check each stage
-            for stage, config in self.config["stages"].items():
-                # Filename detection
-                filename = os.path.basename(filepath).lower()
-                for pattern in config["filename_patterns"]:
-                    if pattern.lower() in filename:
-                        detected[stage].append(("filename", pattern))
-                
-                # Keyword detection in code
-                for keyword in config["keywords"]:
-                    if keyword.lower() in content.lower():
-                        detected[stage].append(("keyword", keyword))
-                
-                # Import detection
+        except SyntaxError:
+            had_syntax_error = True
+
+        filename = os.path.basename(filepath).lower()
+        content_lower = content.lower()
+
+        # Check each stage
+        for stage, config in self.config["stages"].items():
+            # Filename detection
+            for pattern in config["filename_patterns"]:
+                if pattern.lower() in filename:
+                    detected[stage].append(("filename", pattern))
+
+            # Keyword detection in code
+            for keyword in config["keywords"]:
+                if keyword.lower() in content_lower:
+                    detected[stage].append(("keyword", keyword))
+
+            # Import detection (requires a successful AST parse)
+            if tree is not None:
                 for node in ast.walk(tree):
                     if isinstance(node, ast.Import):
                         for alias in node.names:
@@ -261,11 +279,8 @@ class PipelineAnalyzer(BaseAnalyzer):
                     elif isinstance(node, ast.ImportFrom):
                         if node.module and node.module in config["imports"]:
                             detected[stage].append(("import", node.module))
-        
-        except Exception:
-            pass  # Skip files that can't be parsed
-        
-        return detected
+
+        return detected, had_syntax_error
     
     def _format_stages(self, stage_files: Dict[str, List[Tuple]]) -> Dict:
         """
