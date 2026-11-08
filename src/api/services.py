@@ -60,7 +60,21 @@ class UploadService:
             "pipeline", session.session_id, session.local_path
         )
         pipeline_result = pipeline_analyzer.analyze()
-        
+
+        # Detect non-ML content (GUI/web framework keywords and imports) per file,
+        # so the client can flag files that mix ML code with other concerns before
+        # the user runs the full analysis. This reuses MLContentAnalyzer's own
+        # detection logic/config rather than duplicating the keyword list here.
+        ml_content_analyzer = AnalyzerFactory.create_analyzer(
+            "ml_content", session.session_id, session.local_path
+        )
+        non_ml_keywords_found = {}
+        for py_file in ml_content_analyzer.context.get_all_python_files():
+            file_result = ml_content_analyzer.analyze_file(py_file)
+            if file_result["non_ml_keywords_found"]:
+                non_ml_keywords_found[py_file] = file_result["non_ml_keywords_found"]
+        pipeline_result.details["non_ml_keywords_found"] = non_ml_keywords_found
+
         # Save session metadata
         session.save_session(
             tree_structure=tree_structure,
