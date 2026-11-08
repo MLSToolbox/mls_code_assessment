@@ -1,6 +1,7 @@
 import ast
 import os
 import json
+import re
 from typing import Dict, List
 
 from analyzers.base_analyzer import BaseAnalyzer
@@ -36,6 +37,13 @@ class MLContentAnalyzer(BaseAnalyzer):
         
         non_ml_config = self.config.get('non_ml_indicators', {})
         self.non_ml_keywords = set(kw.lower() for kw in non_ml_config.get('keywords', []))
+        # Word-boundary patterns, precompiled once: a plain substring search
+        # (e.g. "dash" in "dashboard") flags unrelated identifiers that merely
+        # contain a keyword as part of a longer word.
+        self._keyword_patterns = {
+            keyword: re.compile(r'\b' + re.escape(keyword) + r'\b')
+            for keyword in self.non_ml_keywords
+        }
         self.non_ml_imports = set(imp.lower() for imp in non_ml_config.get('imports', []))
     
     @property
@@ -125,9 +133,9 @@ class MLContentAnalyzer(BaseAnalyzer):
         """
         source_lower = source.lower()
         non_ml_keywords_found = []
-        
-        for keyword in self.non_ml_keywords:
-            if keyword in source_lower:
+
+        for keyword, pattern in self._keyword_patterns.items():
+            if pattern.search(source_lower):
                 non_ml_keywords_found.append(f"keyword:{keyword}")
         
         for node in ast.walk(tree):
