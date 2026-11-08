@@ -126,7 +126,7 @@ def transverse_tree_to_get_packages_and_files(node, dir_list=None):
     # Case: Python module (file)
     if n_type == "file":
         n_name = node.get("name", "")
-        if n_name.endswith(".py") and n_name != "__init__.py":
+        if n_name.endswith(".py") and n_name != "__init__.py" and node.get("valid_syntax", True):
             # Return list with single module path
             return [n_path]
         return []
