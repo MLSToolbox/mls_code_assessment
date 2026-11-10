@@ -27,7 +27,9 @@
       "jsonify",
       "redirect",
       "url_for",
-      "render_template"
+      "render_template",
+      "getlogger",
+      "basicconfig"
     ],
     "imports": [
       "tkinter",
@@ -51,7 +53,14 @@
       "sanic",
       "starlette",
       "nicegui",
-      "reflex"
+      "reflex",
+      "logging",
+      "loguru",
+      "structlog",
+      "argparse",
+      "click",
+      "typer",
+      "smtplib"
     ]
   }
 }
