@@ -1,162 +1,35 @@
 from typing import Dict, List, Set, Any
+
+
 class CCPPCalculator:
     """
-    Calculator for Package Functional Purity (CCPP) metrics.
-    
-    Calculates CCPP score based on:
-    1. ML content ratio (n_ml / n_total)
-    2. Stage diversity penalty (cohesion factor CF)
-    """
-    def __init__(self, etapas_max: int = 5):
-        """
-        Initialize CCPP calculator.
-        
-        Args:
-            etapas_max: Maximum number of pipeline stages (dynamically sourced from config)
-        """
-        self.etapas_max = etapas_max
-    def calculate_ccpp(
-        self, 
-        n_total: int, 
-        n_ml: int, 
-        unique_stages: int,
-        unique_phases: int = 0
-    ) -> float:
-        """
-        Calculate CCPP score for a package.
-        Formula: CCPP = (n_ml / n_total) × CF
-        The Cohesion Factor (CF) is calculated based on stage diversity:
-        1. Single Stage: CF = 1.0 (Ideal)
-        2. Multiple Stages:
-           - Same Phase (Affinity Bonus): Penalty is halved. Mixing related stages (e.g., Collection & Cleaning) is less severe.
-             CF = 1 - ((n_stages - 1) / (ETAPAS_MAX - 1)) * 0.5
-           - Different Phases: Full penalty. Mixing unrelated stages (e.g., Cleaning & Training) reduces cohesion significantly.
-             CF = 1 - ((n_stages - 1) / (ETAPAS_MAX - 1))
-        
-        Args:
-            n_total: Total modules in package
-            n_ml: Modules identified as part of the ML pipeline
-            unique_stages: Count of distinct pipeline stages found
-            unique_phases: Count of distinct pipeline phases (Data Engineering vs Model Development)
-            
-        Returns:
-            CCPP score (0-1)
-        """
-        if n_total == 0:
-            return 0.0
-        cf = 1.0
-        if self.etapas_max > 1 and unique_stages > 1:
-            base_penalty = (unique_stages - 1) / (self.etapas_max - 1)
-            # Affinity Bonus: If all stages belong to the same phase, halve the penalty
-            if unique_phases == 1:
-                cf = 1 - (base_penalty * 0.5)
-            else:
-                cf = 1 - base_penalty 
-        ccpp_score = (n_ml / n_total) * cf
-        return round(ccpp_score, 4)
-    def get_cohesion_level(self, package_metrics: Dict[str, Any]) -> str:
-        """
-        Determines qualitative cohesion level based on package metrics and rules from ccpp_rules.json.
-        
-        Args:
-            package_metrics: Dictionary containing package analysis results.
-            
-        Returns:
-            Cohesion level: "very_high", "high", "medium", "low", "very_low"
-        """
-        phases_detected = set(package_metrics.get('phases_detected', []))
-        number_of_phases = len(phases_detected)
-        number_of_stages = package_metrics.get('unique_stages_found', 0)
-        ml_modules = package_metrics.get('ml_modules', 0)
-        total_modules = package_metrics.get('total_modules', 1)
-        ml_ratio = ml_modules / total_modules if total_modules > 0 else 0
-        ccpp_score = package_metrics.get('ccpp_score', 0.0)
-        
-        # Calculate average elements per stage (used in some rules)
-        average_elems_per_stage = 0
-        if number_of_stages > 0:
-            modules = package_metrics.get('modules', [])
-            total_stage_usage = sum(len(m.get('stages', [])) for m in modules)
-            average_elems_per_stage = total_stage_usage / number_of_stages
+    Aggregation helper for CCPP (Conceptual Cohesion of Pipeline Packages).
 
-        # Rules Translation from ccpp_rules.json (IDs 5-12)
-        
-        # Rule 12: Pure single stage (Very High)
-        if number_of_phases == 1 and number_of_stages == 1 and ml_ratio >= 1:
-            return "very_high"
-            
-        # Rule 10: Focused phase, multiple stages (High)
-        if number_of_phases == 1 and number_of_stages > 1 and ml_ratio >= 1:
-            return "high"
-            
-        # Rule 7: Mixed phases, but organized (High)
-        if number_of_phases > 1 and ml_ratio >= 1 and average_elems_per_stage == 1:
-            return "high"
-            
-        # Rule 11: Focused stage but noisy (Medium)
-        if number_of_phases == 1 and number_of_stages == 1 and ml_ratio < 1:
-            return "medium"
-            
-        # Rule 9: Focused phase but noisy (Medium)
-        if number_of_phases == 1 and number_of_stages > 1 and ml_ratio < 1:
-            return "medium"
-            
-        # Rule 8: Mixed phases, split stages (Medium)
-        if number_of_phases > 1 and ml_ratio >= 1 and average_elems_per_stage > 1:
-            return "medium"
-            
-        # Rule 6: Mixed phases, noisy, organized stages (Low)
-        if number_of_phases > 1 and ml_ratio < 1 and average_elems_per_stage == 1:
-            return "low"
-            
-        # Rule 5: Mixed phases, noisy, split stages (Very Low)
-        if number_of_phases > 1 and ml_ratio < 1 and average_elems_per_stage > 1:
-            return "very_low"
-            
-        # Fallback to score for edge cases (Rules 1-4 and others)
-        if ccpp_score >= 0.8:
-            return "very_high"
-        if ccpp_score >= 0.6:
-            return "high"
-        if ccpp_score >= 0.4:
-            return "medium"
-        if ccpp_score >= 0.2:
-            return "low"
-            
-        return "very_low"
-    
-    def get_overall_quality(self, average_ccpp: float) -> str:
-        """
-        Determines overall project quality based on average CCPP.
-        
-        Args:
-            average_ccpp: Average CCPP across all packages
-            
-        Returns:
-            Quality level: "Excellent", "Good", "Fair", or "Critical"
-        """
-        if average_ccpp > 0.8:
-            return "Excellent"
-        if average_ccpp >= 0.6:
-            return "Good"
-        if average_ccpp >= 0.4:
-            return "Fair"
-        return "Critical"
-    
+    The actual CCP_i level/MP/MS/MPC arithmetic lives in the shared
+    analyzers.common.ccp_calculator.calculate_ccp(), used identically by
+    CCPM (modules) and CCPP (packages) per the paper's formula. This class
+    is responsible only for turning a package's modules into the inputs
+    that function needs (unique phases/stages, mixed-content flag), plus
+    a couple of presentation helpers.
+    """
+
+    def __init__(self, etapas_max: int = 5):
+        self.etapas_max = etapas_max
+
     def aggregate_package_metrics(
-        self, 
+        self,
         modules_ccpm_results: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
         Aggregate CCPM results from multiple modules into package-level metrics.
-        
+
         Args:
             modules_ccpm_results: List of CCPM results for each module
-            
+
         Returns:
             Dictionary with aggregated package metrics:
             - n_total: Total modules
-            - n_ml: ML modules
+            - n_ml: ML modules (modules with at least one detected stage)
             - all_stages: Set of unique stages
             - modules_info: Per-module details
         """
@@ -164,7 +37,7 @@ class CCPPCalculator:
         n_ml = 0
         all_stages: Set[str] = set()
         modules_info: List[Dict[str, Any]] = []
-        
+
         for ccpm_result in modules_ccpm_results:
             if ccpm_result and ccpm_result.get('stages_detected'):
                 n_ml += 1
@@ -180,12 +53,44 @@ class CCPPCalculator:
                     'stages': [],
                     'cohesion': ccpm_result.get('cohesion_level')
                 })
-        
+
         return {
             'n_total': n_total,
             'n_ml': n_ml,
             'all_stages': all_stages,
             'modules_info': modules_info
         }
+
+    def has_mixed_content(
+        self,
+        n_total: int,
+        n_ml: int,
+        modules_ccpm_results: List[Dict[str, Any]]
+    ) -> bool:
+        """
+        MPC(package): True if the package mixes ML pipeline code with code
+        foreign to the pipeline. This is true if either:
+        - Not every module in the package belongs to the pipeline (n_ml < n_total), or
+        - A pipeline module itself already mixes in non-pipeline code (its own MPC=True).
+        """
+        if n_ml < n_total:
+            return True
+        return any(
+            ccpm_result.get('mpc') for ccpm_result in modules_ccpm_results
+            if ccpm_result and ccpm_result.get('mpc') is not None
+        )
+
+    def get_overall_quality(self, average_ccp_level: float) -> str:
+        """
+        Determine overall project quality from the average CCP_i level (1-5).
+        """
+        if average_ccp_level >= 4.5:
+            return "Excellent"
+        if average_ccp_level >= 3.5:
+            return "Good"
+        if average_ccp_level >= 2.5:
+            return "Fair"
+        return "Critical"
+
     def get_etapas_max(self) -> int:
         return self.etapas_max

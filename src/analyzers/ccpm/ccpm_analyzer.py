@@ -6,6 +6,7 @@ from analyzers.base_analyzer import BaseAnalyzer
 from analyzers.ml_content import MLContentAnalyzer
 from analyzers.ccpm.nloc_calculator import NLOCCalculator
 from analyzers.ccpm.ccpm_evaluator import CCPMEvaluator
+from analyzers.common import calculate_ccp
 from analyzers.pipeline.pipeline_schema import get_pipeline_schema
 from config.settings import settings
 
@@ -13,22 +14,27 @@ from config.settings import settings
 class CCPMAnalyzer(BaseAnalyzer):
     """
     Conceptual Cohesion of Pipeline Modules (CCPM) Analyzer.
-    
-    Evaluates conceptual cohesion by detecting if modules/classes mix responsibilities
-    from different ML pipeline tasks or stages, violating Single Responsibility Principle.
-    
+
+    Evaluates conceptual cohesion using the paper's formula:
+        CCP_i(C) = 5 - MP(C) - MS(C) - 2 * MPC(C)
+    where MP = spans multiple phases, MS = spans multiple stages, and
+    MPC = mixes ML pipeline code with non-pipeline code (web API, UI,
+    logs, utilities, ...). See analyzers.common.ccp_calculator.
+
     Analyzes:
     1. ML pipeline stage/phase cohesion (via pipeline_stages.json)
     2. Responsibility mixing detection (single vs multiple stages/phases)
     3. ML content presence (via MLContentAnalyzer)
-    4. NLOC (Non-comment Lines of Code) for size-based recommendations
-    
-    Cohesion Levels:
-    - Very High: Single stage, ML content only (perfect SRP)
-    - High: Single stage with minor issues
-    - Medium: Single phase, multiple stages (related tasks mixed)
-    - Low: Multiple phases, ML content only (unrelated tasks)
-    - Very Low: Multiple phases + non-ML content (worst case)
+    4. NLOC (Non-comment Lines of Code) - reported as an informational
+       note only; it does not affect the CCP_i level, per the paper.
+
+    Cohesion Levels (CCP_i, 1-5):
+    - Very High (5): Single stage, single phase, ML content only
+    - High (4): Single phase, multiple stages, ML content only
+    - Medium (3): Either (single phase, multiple stages, mixed content)
+      or (multiple phases, multiple stages, ML content only)
+    - Low (2): Single phase, multiple stages, mixed content
+    - Very Low (1): Multiple phases, multiple stages, mixed content
     """
     
     def __init__(self, session_id: str, local_path: str, context=None):
@@ -192,19 +198,33 @@ class CCPMAnalyzer(BaseAnalyzer):
         all_phases.discard('unknown')
         unique_phases = len(all_phases)
         
-        cohesion_level = self._determine_cohesion_level(
-            unique_stages, 
-            unique_phases,
-            ml_content_only,
-            above_nloc_threshold
-        )
-        
+        has_mixed_content = not ml_content_only
+
+        # Exclusion categories don't get a CCP_i level: no pipeline stage was
+        # detected at all, so "spans multiple phases/stages" is meaningless.
+        if unique_stages == 0 and has_mixed_content:
+            cohesion_level = 'non_ml_file'
+            ccp_fields = {'mp': None, 'ms': None, 'mpc': None, 'ccp_level': None}
+        elif unique_stages == 0:
+            cohesion_level = 'not_applicable'
+            ccp_fields = {'mp': None, 'ms': None, 'mpc': None, 'ccp_level': None}
+        else:
+            ccp = calculate_ccp(unique_phases, unique_stages, has_mixed_content)
+            cohesion_level = ccp['cohesion_level']
+            ccp_fields = {
+                'mp': ccp['mp'],
+                'ms': ccp['ms'],
+                'mpc': ccp['mpc'],
+                'ccp_level': ccp['ccp_level'],
+            }
+
         result = {
             'unique_stages': unique_stages,
             'unique_phases': unique_phases,
             'stages_detected': list(all_stages),
             'phases_detected': list(all_phases),
             'cohesion_level': cohesion_level,
+            **ccp_fields,
             'function_stages': function_stages,
             'source': 'pipeline_metadata_strict',
             'ml_content_only': ml_content_only,
@@ -213,7 +233,7 @@ class CCPMAnalyzer(BaseAnalyzer):
             'above_nloc_threshold': above_nloc_threshold,
             'is_script_file': is_script_file
         }
-        
+
         return result
     
     def _extract_functions(self, tree: ast.Module) -> Dict[str, ast.FunctionDef]:
@@ -384,117 +404,31 @@ class CCPMAnalyzer(BaseAnalyzer):
         
         return detected_stages
     
-    def _determine_cohesion_level(
-        self, 
-        unique_stages: int, 
-        unique_phases: int,
-        ml_content_only: bool,
-        above_nloc_threshold: bool
-    ) -> str:
-        """
-        Determine cohesion level based on Conceptual Cohesion of Pipeline Modules.
-        
-        Evaluates if module/class mixes responsibilities from different ML pipeline
-        tasks or stages, following Single Responsibility Principle (SRP).
-        
-        Args:
-            unique_stages: Number of unique ML pipeline stages
-            unique_phases: Number of unique ML pipeline phases
-            ml_content_only: True if all content is ML-related (no non-ML code)
-            above_nloc_threshold: Whether file is above NLOC threshold
-            
-        Returns:
-            'very_high': Single stage, ML content only (perfect SRP)
-            'high': Single stage with non-ML content OR single phase/single stage below threshold
-            'medium': Single phase, multiple stages (related but mixed responsibilities)
-            'low': Multiple phases, ML content only (unrelated tasks mixed)
-            'very_low': Multiple phases with non-ML content (worst case)
-            'non_ml_file': File doesn't contain ML content
-            'not_applicable': Has ML content but no pipeline stages detected (cohesion analysis not applicable)
-        """
-        # Non-ML files don't count for cohesion
-        # A file is non_ml_file ONLY if it has non-ML content AND no stages detected
-        # This ensures files with ml_content_only=True are never classified as non_ml_file
-        if not ml_content_only and unique_stages == 0:
-            return 'non_ml_file'
-        
-        # No stages detected BUT has ML content only
-        # This can happen if ML keywords are found but no specific pipeline stages detected
-        # Mark as not_applicable since cohesion analysis requires pipeline stages
-        if unique_stages == 0 and ml_content_only:
-            return 'not_applicable'
-        
-        # No stages detected AND no ML content - clearly non-ML file
-        if unique_stages == 0:
-            return 'non_ml_file'
-        
-        # VERY HIGH: Single stage + ML content only = Perfect SRP
-        if unique_stages == 1 and ml_content_only and above_nloc_threshold:
-            return 'very_high'
-        
-        # HIGH: Single stage but has non-ML content OR is too small
-        if unique_stages == 1:
-            return 'high'
-        
-        # Multiple phases = mixing unrelated pipeline tasks
-        if unique_phases >= 2:
-            # VERY LOW: Multiple phases + non-ML content
-            if not ml_content_only:
-                return 'very_low'
-            # LOW: Multiple phases, ML content only
-            else:
-                return 'low'
-        
-        # Single phase, multiple stages = related tasks but mixed
-        if unique_phases == 1 and unique_stages > 1:
-            # MEDIUM: Could be better separated but at least same phase
-            if not ml_content_only:
-                return 'medium'
-            else:
-                return 'medium'
-        
-        # Default fallback
-        return 'medium'
-    
     def _calculate_cohesion_score(self, results: Dict) -> float:
         """
-        Calculate qualitative score based on Conceptual Cohesion of Pipeline Modules.
-        
-        Maps cohesion levels to scores for aggregated reporting:
-        - very_high: 10 points (single stage, ML only - perfect SRP)
-        - high: 8 points (single stage with minor issues)
-        - medium: 5 points (single phase, multiple stages)
-        - low: 3 points (multiple phases, ML content)
-        - very_low: 1 point (multiple phases + non-ML content)
-        
-        Only counts files with ML content.
-        
+        Calculate the project-wide CCPM score as the average CCP_i level
+        (1-5, per the paper's formula) across all files that got a level.
+
+        Files classified as 'non_ml_file' or 'not_applicable' have no
+        CCP_i level (spanning phases/stages is meaningless without a
+        detected pipeline stage) and are excluded from the average.
+
         Args:
             results: Analysis results dictionary
-            
+
         Returns:
-            Score from 0-10 based on conceptual cohesion levels
+            Score in [1.0, 5.0], or 0 if no file could be scored.
         """
-        cohesion_scores = {
-            'very_high': 10,
-            'high': 8,
-            'medium': 5,
-            'low': 3,
-            'very_low': 1
-        }
-        
-        total_score = 0
+        total_level = 0
         counted_files = 0
-        
+
         for file_data in results['files'].values():
-            cohesion = file_data.get('cohesion_level', 'high')
-            
-            # Only count ML files (exclude non_ml_file)
-            if cohesion in cohesion_scores:
-                total_score += cohesion_scores.get(cohesion, 10)
+            ccp_level = file_data.get('ccp_level')
+
+            if ccp_level is not None:
+                total_level += ccp_level
                 counted_files += 1
-        
+
         if counted_files > 0:
-            # Normalize to 0-10 scale
-            return round((total_score / (counted_files * 10)) * 10, 2)
+            return round(total_level / counted_files, 2)
         return 0

@@ -13,6 +13,7 @@ from analyzers.common.variable_detection import (
     get_method_calls
 )
 from analyzers.common.package_utils import  find_connected_groups,transverse_tree_to_get_packages_and_files
+from analyzers.common.ccp_calculator import calculate_ccp
 
 __all__ = [
     'extract_methods',
@@ -23,5 +24,6 @@ __all__ = [
     'get_files_accessed',
     'get_method_calls',
     'find_connected_groups',
-    'transverse_tree_to_get_packages_and_files'
+    'transverse_tree_to_get_packages_and_files',
+    'calculate_ccp'
 ]

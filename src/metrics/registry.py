@@ -85,27 +85,32 @@ METRICS_REGISTRY = {
         metric_id="ccpm",
         name="Conceptual Cohesion of Pipeline Modules",
         description=(
-            "Evaluates whether each module keeps a focused ML pipeline responsibility."
+            "Evaluates whether each module keeps a focused ML pipeline responsibility, "
+            "using the CCP_i formula for software components (modules)."
         ),
         formula=(
-            "=== Scoring Model ===\n"
-            "- very_high -> 10 points\n"
-            "- high -> 8 points\n"
-            "- medium -> 5 points\n"
-            "- low -> 3 points\n"
-            "- very_low -> 1 point\n\n"
+            "=== Formula ===\n"
+            "CCP_m(C) = 5 - MP(C) - MS(C) - 2 * MPC(C)\n\n"
+            "=== Terms ===\n"
+            "- MP(C) = 1 if the module spans multiple pipeline phases, else 0\n"
+            "- MS(C) = 1 if the module spans multiple pipeline stages, else 0\n"
+            "- MPC(C) = 1 if the module mixes ML pipeline code with non-pipeline code\n"
+            "  (web API, UI, logs, utilities, ...), else 0\n\n"
             "=== Project Score ===\n"
-            "score = average(level_points for scored files)\n\n"
+            "score = average(CCP_m level for scored files), on a 1-5 scale\n\n"
             "=== Notes ===\n"
-            "- Files classified as non_ml_file or not_applicable are excluded from scoring.\n"
-            "- Cohesion level depends on detected stages, phases, ML-only content, and NLOC threshold."
+            "- Files classified as non_ml_file or not_applicable (no pipeline stage\n"
+            "  detected at all) are excluded from scoring.\n"
+            "- File size (NLOC) does not affect the level; it is only surfaced as an\n"
+            "  informational note when the file is very small."
         ),
-        ideal_range={"min": 0, "max": 10, "optimal": ">=8.0", "acceptable": "5.0-7.99", "warning": "<5.0"},
+        ideal_range={"min": 1, "max": 5, "optimal": ">=4.5", "acceptable": "2.5-4.49", "warning": "<2.5"},
         interpretation={
-            "8.0-10.0": "Strong module focus with limited responsibility mixing.",
-            "5.0-7.99": "Moderate focus; related responsibilities are mixed.",
-            "3.0-4.99": "Low conceptual cohesion; multiple concerns mixed.",
-            "0.0-2.99": "Very low cohesion; severe responsibility mixing."
+            "4.5-5.0": "Very high cohesion: single phase, single stage, ML content only.",
+            "3.5-4.49": "High cohesion: single phase, multiple stages, ML content only.",
+            "2.5-3.49": "Medium cohesion: either multiple phases with ML-only content, or a single stage mixed with non-pipeline code.",
+            "1.5-2.49": "Low cohesion: multiple stages within one phase, mixed with non-pipeline code.",
+            "1.0-1.49": "Very low cohesion: multiple phases mixed with non-pipeline code."
         },
         references=[
             "https://en.wikipedia.org/wiki/Single-responsibility_principle",
@@ -244,25 +249,30 @@ METRICS_REGISTRY = {
         metric_id="ccpp",
         name="Conceptual Cohesion of Pipeline Packages",
         description=(
-            "Evaluates package-level conceptual focus by combining ML-content ratio with stage/phase consistency."
+            "Evaluates whether each package keeps a focused ML pipeline responsibility, "
+            "using the same CCP_i formula as CCPM, applied to packages instead of modules."
         ),
         formula=(
-            "=== Raw Metric ===\n"
-            "content_ratio = n_ml_modules / n_total_modules\n"
-            "cohesion_factor = stage_phase_consistency_penalty_adjusted\n"
-            "raw_ccpp = content_ratio * cohesion_factor\n\n"
-            "=== API Score ===\n"
-            "score = average(raw_ccpp_across_packages) * 10\n\n"
+            "=== Formula ===\n"
+            "CCP_p(C) = 5 - MP(C) - MS(C) - 2 * MPC(C)\n\n"
+            "=== Terms (aggregated across the package's modules) ===\n"
+            "- MP(C) = 1 if the package spans multiple pipeline phases, else 0\n"
+            "- MS(C) = 1 if the package spans multiple pipeline stages, else 0\n"
+            "- MPC(C) = 1 if the package contains a module outside the pipeline, or a\n"
+            "  pipeline module that itself mixes in non-pipeline code, else 0\n\n"
+            "=== Project Score ===\n"
+            "score = average(CCP_p level for scored packages), on a 1-5 scale\n\n"
             "=== Notes ===\n"
-            "- raw_ccpp is in [0, 1], API score is in [0, 10].\n"
-            "- Related stages in the same phase receive reduced penalty."
+            "- Packages with no pipeline stage detected in any of their modules\n"
+            "  ('non_ml_package') are excluded from scoring."
         ),
-        ideal_range={"min": 0, "max": 10, "optimal": ">8.0", "acceptable": "6.0-8.0", "warning": "<6.0"},
+        ideal_range={"min": 1, "max": 5, "optimal": ">=4.5", "acceptable": "2.5-4.49", "warning": "<2.5"},
         interpretation={
-            ">8.0": "High conceptual cohesion and high package purity.",
-            "6.0-8.0": "Moderate cohesion with limited stage/phase mixing.",
-            "4.0-5.99": "Low cohesion; noticeable responsibility mixing.",
-            "0.0-3.99": "Very low cohesion; package is highly mixed."
+            "4.5-5.0": "Very high cohesion: the package focuses on one stage with no non-pipeline content.",
+            "3.5-4.49": "High cohesion: multiple stages within one phase, no non-pipeline content.",
+            "2.5-3.49": "Medium cohesion: either multiple phases with pipeline-only content, or one stage mixed with non-pipeline content.",
+            "1.5-2.49": "Low cohesion: multiple stages within one phase, mixed with non-pipeline content.",
+            "1.0-1.49": "Very low cohesion: multiple phases mixed with non-pipeline content."
         },
         references=[
             "https://en.wikipedia.org/wiki/Cohesion_(computer_science)",
