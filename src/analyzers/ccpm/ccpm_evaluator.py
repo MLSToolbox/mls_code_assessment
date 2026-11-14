@@ -23,59 +23,38 @@ class CCPMEvaluator(BaseEvaluator):
     def _match_rule(self, metrics: Dict) -> Optional[Dict]:
         """
         Match CCPM metrics against evaluation rules.
-        
+
+        Rules are keyed directly on the paper's binary indicators, already
+        computed by analyzers.common.ccp_calculator.calculate_ccp():
+            - mp (bool): spans multiple pipeline phases
+            - ms (bool): spans multiple pipeline stages
+            - mpc (bool): mixes ML pipeline code with non-pipeline code
+
+        Files with no CCP_i level (mp/ms/mpc are None - non_ml_file or
+        not_applicable) never match any rule, which is intentional: there's
+        nothing to diagnose for a file without pipeline evidence.
+
         Args:
-            metrics: Dictionary containing CCPM metrics:
-                - unique_phases (int): Number of unique phases
-                - unique_stages (int): Number of unique stages  
-                - ml_content_only (bool): True if all content is ML-related
-                - nloc (int): Non-comment lines of code
-                - above_nloc_threshold (bool): True if NLOC exceeds threshold
-        
+            metrics: Per-file metrics dict from CCPMAnalyzer._analyze_file
+
         Returns:
             Matched rule dict or None if no match found
         """
-        unique_phases = metrics.get('unique_phases', 0)
-        unique_stages = metrics.get('unique_stages', 0)
-        ml_content_only = metrics.get('ml_content_only', True)
-        above_nloc_threshold = metrics.get('above_nloc_threshold', False)
-        
+        mp = metrics.get('mp')
+        ms = metrics.get('ms')
+        mpc = metrics.get('mpc')
+
+        if mp is None or ms is None or mpc is None:
+            return None
+
         for rule in self.rules:
             conditions = rule['conditions']
-            
-            # Check phases condition
-            phases_cond = conditions['phases']
-            if phases_cond != unique_phases:
+            if conditions['mp'] != mp:
                 continue
-            
-            # Check stages condition
-            stages_cond = conditions['stages']
-            if stages_cond == 1:
-                if unique_stages != 1:
-                    continue
-            elif stages_cond == ">1":
-                if unique_stages <= 1:
-                    continue
-            elif stages_cond == "any":
-                # Any number of stages is acceptable
-                pass
-            else:
-                # Unknown condition, skip rule
+            if conditions['ms'] != ms:
                 continue
-            
-            # Check ml_content_only condition
-            ml_cond = conditions['ml_content_only']
-            if ml_cond != ml_content_only:
+            if conditions['mpc'] != mpc:
                 continue
-            
-            # Check nloc_above_threshold condition (if present in rule)
-            if 'nloc_above_threshold' in conditions:
-                nloc_cond = conditions['nloc_above_threshold']
-                if nloc_cond != above_nloc_threshold:
-                    continue
-            
-            # All conditions matched, return this rule
             return rule
-        
-        # No rule matched
+
         return None

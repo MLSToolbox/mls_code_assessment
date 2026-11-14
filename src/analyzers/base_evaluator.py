@@ -55,32 +55,31 @@ class BaseEvaluator(ABC):
             or None if no issues found (perfect cohesion)
         """
         matched_rule = self._match_rule(metrics)
-        
+
         if not matched_rule:
             return None
-        
+
+        diagnosis = self._render_template(
+            matched_rule['diagnosis_template'],
+            file_path,
+            metrics
+        )
+        diagnosis = self._append_nloc_note(diagnosis, metrics)
+
         # Check if recommendation is null (e.g., rule 9 - perfect cohesion)
         if not matched_rule.get('recommendation_template'):
             return {
                 'file': file_path,
-                'diagnosis': self._render_template(
-                    matched_rule['diagnosis_template'],
-                    file_path,
-                    metrics
-                ),
+                'diagnosis': diagnosis,
                 'recommendation': None,
                 'severity': matched_rule.get('severity', 'info'),
                 'rule_id': matched_rule['id'],
                 'metrics': metrics
             }
-        
+
         return {
             'file': file_path,
-            'diagnosis': self._render_template(
-                matched_rule['diagnosis_template'],
-                file_path,
-                metrics
-            ),
+            'diagnosis': diagnosis,
             'recommendation': self._render_template(
                 matched_rule['recommendation_template'],
                 file_path,
@@ -90,6 +89,23 @@ class BaseEvaluator(ABC):
             'rule_id': matched_rule['id'],
             'metrics': metrics
         }
+
+    def _append_nloc_note(self, diagnosis: str, metrics: Dict) -> str:
+        """
+        Append a non-scoring note when the component is below the
+        configured NLOC threshold. File size does not affect the CCP_i
+        level (it isn't part of the paper's formula), but it's still
+        useful context: cohesion levels on very small files are less
+        meaningful evidence than on larger ones.
+        """
+        if metrics.get('above_nloc_threshold') is False:
+            nloc = metrics.get('nloc', 'N/A')
+            return (
+                f"{diagnosis} (Note: this file is small (NLOC={nloc}), "
+                "so this cohesion level is based on little evidence - "
+                "interpret it with caution.)"
+            )
+        return diagnosis
     
     def _render_template(self, template: str, file_path: str, metrics: Dict) -> str:
         """
