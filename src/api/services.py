@@ -133,7 +133,8 @@ class AnalysisService:
         has_pipeline_overrides = bool(
             analysis_request.pipeline_overrides and (
                 analysis_request.pipeline_overrides.file_stages or
-                analysis_request.pipeline_overrides.excluded_files
+                analysis_request.pipeline_overrides.excluded_files or
+                analysis_request.pipeline_overrides.mixed_content_overrides
             )
         )
 
@@ -150,11 +151,15 @@ class AnalysisService:
         
         # Create shared analysis context with (potentially overridden) pipeline metadata
         shared_context = AnalysisContext(
-            session_id, 
+            session_id,
             session.local_path,
             pipeline_metadata=pipeline_metadata,
             tree_metadata=tree_metadata,
-            manual_override_applied=has_pipeline_overrides
+            manual_override_applied=has_pipeline_overrides,
+            mixed_content_overrides=(
+                analysis_request.pipeline_overrides.mixed_content_overrides
+                if analysis_request.pipeline_overrides else None
+            )
         )
         pipeline_metadata = shared_context.get_pipeline_metadata() or pipeline_metadata
 
