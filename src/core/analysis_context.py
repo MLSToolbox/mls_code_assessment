@@ -42,6 +42,7 @@ class AnalysisContext:
         pipeline_metadata: Optional[Dict[str, Any]] = None,
         tree_metadata: Optional[Dict[str, Any]] = None,
         manual_override_applied: bool = False,
+        mixed_content_overrides: Optional[Dict[str, bool]] = None,
     ):
         self.session_id = session_id
         self.local_path = local_path
@@ -55,6 +56,11 @@ class AnalysisContext:
         self._pipeline_metadata: Optional[Dict[str, Any]] = self._normalize_pipeline_metadata(
             pipeline_metadata
         )
+        self._mixed_content_overrides: Dict[str, bool] = {}
+        for raw_path, value in (mixed_content_overrides or {}).items():
+            normalized = self._normalize_file_path(raw_path)
+            if normalized:
+                self._mixed_content_overrides[normalized] = bool(value)
 
     def get_file_ast(self, file_path: str) -> Optional[ast.Module]:
         normalized_path = self._normalize_file_path(file_path)
@@ -209,6 +215,15 @@ class AnalysisContext:
 
     def get_pipeline_metadata(self) -> Optional[Dict[str, Any]]:
         return self._pipeline_metadata
+
+    def get_mixed_content_override(self, file_path: str) -> Optional[bool]:
+        """
+        User-provided override for a file's mixed-content (MPC) classification,
+        or None if the user hasn't overridden it (defer to the automatic
+        ML-content detection).
+        """
+        normalized_path = self._normalize_file_path(file_path)
+        return self._mixed_content_overrides.get(normalized_path)
     def get_tree_metadata(self) -> Optional[Dict[str, Any]]:
         """
         Get tree structure metadata.

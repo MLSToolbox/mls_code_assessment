@@ -12,9 +12,13 @@ class PipelineOverrides(BaseModel):
     Attributes:
         file_stages: Manual stage assignments per file
         excluded_files: Files/directories to exclude from analysis
+        mixed_content_overrides: Manual mixed-content (MPC) flag per file,
+            overriding the automatic ML-content detection, which can
+            produce false positives/negatives
     """
     file_stages: Dict[str, List[str]] = Field(default_factory=dict)
     excluded_files: List[str] = Field(default_factory=list)
+    mixed_content_overrides: Dict[str, bool] = Field(default_factory=dict)
     
     @field_validator('file_stages')
     @classmethod

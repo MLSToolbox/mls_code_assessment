@@ -65,6 +65,7 @@ class BaseEvaluator(ABC):
             metrics
         )
         diagnosis = self._append_nloc_note(diagnosis, metrics)
+        diagnosis = self._append_mixed_content_override_note(diagnosis, metrics)
 
         # Check if recommendation is null (e.g., rule 9 - perfect cohesion)
         if not matched_rule.get('recommendation_template'):
@@ -106,7 +107,22 @@ class BaseEvaluator(ABC):
                 "interpret it with caution.)"
             )
         return diagnosis
-    
+
+    def _append_mixed_content_override_note(self, diagnosis: str, metrics: Dict) -> str:
+        """
+        Append a note when the user manually overrode the automatic
+        mixed-content (MPC) detection in the Validate Pipeline step, since
+        that detection can produce false positives/negatives and this
+        changes where the MPC value came from.
+        """
+        if metrics.get('mixed_content_overridden'):
+            return (
+                f"{diagnosis} (Note: the 'mixed content' classification for "
+                "this file was set manually by the user, overriding the "
+                "automatic detection.)"
+            )
+        return diagnosis
+
     def _render_template(self, template: str, file_path: str, metrics: Dict) -> str:
         """
         Render a template string with file and metric values.

@@ -198,7 +198,16 @@ class CCPMAnalyzer(BaseAnalyzer):
         all_phases.discard('unknown')
         unique_phases = len(all_phases)
         
-        has_mixed_content = not ml_content_only
+        detected_mixed_content = not ml_content_only
+
+        # Mixed-content detection can produce false positives/negatives, so a
+        # user-provided override (set in the Validate Pipeline step) always
+        # wins over the automatic ml_content_only detection.
+        mixed_content_override = self.context.get_mixed_content_override(file_path)
+        has_mixed_content = (
+            mixed_content_override if mixed_content_override is not None else detected_mixed_content
+        )
+        mixed_content_overridden = mixed_content_override is not None
 
         # Exclusion categories don't get a CCP_i level: no pipeline stage was
         # detected at all, so "spans multiple phases/stages" is meaningless.
@@ -229,6 +238,7 @@ class CCPMAnalyzer(BaseAnalyzer):
             'source': 'pipeline_metadata_strict',
             'ml_content_only': ml_content_only,
             'non_ml_keywords_found': non_ml_keywords,
+            'mixed_content_overridden': mixed_content_overridden,
             'nloc': nloc,
             'above_nloc_threshold': above_nloc_threshold,
             'is_script_file': is_script_file
