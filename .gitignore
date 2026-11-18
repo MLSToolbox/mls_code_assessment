@@ -167,3 +167,7 @@ cython_debug/
 .env.local
 .env.development
 .env.production
+
+# Claude Code (local config/session files, never shared)
+.claude/
+CLAUDE.md
